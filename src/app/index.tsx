@@ -12,14 +12,14 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const { width } = Dimensions.get('window');
 
 // รายชื่อตั้งต้น
-const initialArtistsList = ['สนธยา', 'โก๊ะ', 'ต่อ', 'พ่อดอกไม้', 'เจมส์', 'น้องพีพี', 'เอม', 'กิ๊ก', 'แม่นัท', 'ซูซู'];
+const initialArtistsList = ['สนธยา', 'โก๊ะ', 'ต่อ', 'พ่อดอกไม้', 'เจมส์', 'น้องพีพี', 'เอม', 'กิ๊ก', 'นัท', 'ซูซู'];
 const defaultArtists = initialArtistsList.map((name, index) => ({
   id: 'artist_' + index, name: name, malai: 0, cash: 0, history: [], avatar: ''
 }));
 
 export default function App() {
   const LEADER_NAME = "สนธยา";
-  const ADMIN_PIN = "1234"; 
+  const ADMIN_PIN = "1410"; 
 
   const [role, setRole] = useState(null); 
   const [currentScreen, setCurrentScreen] = useState('login'); 
@@ -319,7 +319,7 @@ export default function App() {
               
               <View style={styles.actionRow}>
                 <Text style={styles.actionLabel}>มาลัย</Text>
-                {[5, 10, 15, 20].map(num => (
+                {[5, 10, 15, 25].map(num => (
                   <TouchableOpacity key={`m-${num}`} style={styles.btnSmallMalai} onPress={() => handlePressTip(artist.id, num, 'malai')}>
                     <Text style={styles.btnSmallText}>+{num}</Text>
                   </TouchableOpacity>
