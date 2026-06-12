@@ -59,7 +59,10 @@ export default function App() {
   // ☁️ เซฟข้อมูลลง Supabase
   const saveDataToCloud = async (newData) => {
     setArtists(newData);
-    await supabase.from('likay_state').update({ data: newData }).eq('id', 1);
+    const { error } = await supabase.from('likay_state').update({ data: newData }).eq('id', 1);
+    if (error) {
+      alert("⚠️ บันทึกไม่สำเร็จ: รูปภาพอาจจะยังใหญ่เกินไปครับ");
+    }
   };
 
   const changeDay = (days) => {
@@ -132,19 +135,35 @@ export default function App() {
     saveDataToCloud(updatedArtists);
   };
 
-  // 🖼️ เลือกรูปจากเครื่อง
+  // 🖼️ เลือกรูปจากเครื่อง (เพิ่มระบบย่อรูป ป้องกันรูปหาย)
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1], 
-      quality: 0.3,   
+      quality: 0.2,   
       base64: true,
     });
 
     if (!result.canceled) {
-      const imageBase64 = `data:image/jpeg;base64,${result.assets[0].base64}`;
-      setEditAvatarUrl(imageBase64);
+      const asset = result.assets[0];
+
+      if (Platform.OS === 'web') {
+        const img = document.createElement('img');
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 150; // ย่อขนาดให้เล็กจิ๋ว
+          canvas.height = 150;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, 150, 150);
+          
+          const smallBase64 = canvas.toDataURL('image/jpeg', 0.5); 
+          setEditAvatarUrl(smallBase64);
+        };
+        img.src = asset.uri;
+      } else {
+        setEditAvatarUrl(`data:image/jpeg;base64,${asset.base64}`);
+      }
     }
   };
 
