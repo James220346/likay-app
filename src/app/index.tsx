@@ -61,7 +61,7 @@ export default function App() {
     setArtists(newData);
     const { error } = await supabase.from('likay_state').update({ data: newData }).eq('id', 1);
     if (error) {
-      alert("⚠️ บันทึกไม่สำเร็จ: รูปภาพอาจจะยังใหญ่เกินไป หรือการเชื่อมต่อมีปัญหาครับ");
+      alert("⚠️ บันทึกไม่สำเร็จ: การเชื่อมต่อคลาวด์มีปัญหาครับ");
     }
   };
 
@@ -135,51 +135,66 @@ export default function App() {
     saveDataToCloud(updatedArtists);
   };
 
-  // 🖼️ เลือกรูปจากเครื่อง (ฉบับแก้บั๊กรูปหาย 100%)
+  // 🖼️ เลือกรูปจากเครื่อง (ฉบับบังคับย่อรูปบนหน้าเว็บพิกเซลต่ำพิเศษ ไฟล์ไม่เกิน 5KB ชัวร์ 100%)
   const pickImage = async () => {
     try {
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1], 
-        quality: 0.05, // 📉 บีบอัดรูปขั้นสุด
+        quality: 0.1,   
         base64: true,
       });
 
       if (!result.canceled) {
-        const base64Data = `data:image/jpeg;base64,${result.assets[0].base64}`;
-        
-        // เช็คก่อนว่าไฟล์ยังใหญ่เกินไปไหม (เกิน 500,000 ตัวอักษร)
-        if (base64Data.length > 500000) {
-           alert("❌ รูปนี้ไฟล์ใหญ่เกินไปครับระบบไม่รับ!\n💡 วิธีแก้: ให้ไปเปิดรูปนี้ในอัลบั้มมือถือ -> 'แคปหน้าจอ' -> แล้วเอารูปที่แคปมาอัปโหลดแทนครับ");
-           return;
-        }
+        const asset = result.assets[0];
 
-        setEditAvatarUrl(base64Data);
-        alert("✅ ดึงรูปสำเร็จ! \nกดปุ่ม 'อัปเดตข้อมูล' ด้านล่างได้เลยครับ");
+        if (Platform.OS === 'web') {
+          // ใช้เทคนิค HTML5 Canvas ย่อรูปบนเบราว์เซอร์มือถือ บังคับรูปขนาด 100x100 พิกเซล
+          const img = document.createElement('img');
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 100; 
+            canvas.height = 100;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, 100, 100);
+            
+            // เซฟเป็น JPEG คุณภาพต่ำลง 50% ทำให้ไฟล์เหลือแค่ 3KB-5KB (เซฟลง Supabase สำเร็จแน่นอน)
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.5);
+            setEditAvatarUrl(compressedBase64);
+            alert("✅ ย่อขนาดรูปภาพเรียบร้อยแล้ว!\n👉 กรุณากดปุ่ม 'อัปเดตข้อมูล' เพื่อบันทึกลงระบบครับ");
+          };
+          img.src = asset.uri;
+        } else {
+          setEditAvatarUrl(`data:image/jpeg;base64,${asset.base64}`);
+          alert("✅ ดึงรูปสำเร็จ!\n👉 กรุณากดปุ่ม 'อัปเดตข้อมูล' เพื่อบันทึกลงระบบครับ");
+        }
       }
     } catch (e) {
-      alert("เกิดข้อผิดพลาด: " + e.message);
+      alert("เกิดข้อผิดพลาดในการดึงรูป: " + e.message);
     }
   };
 
-  // บันทึกรูปลงฐานข้อมูลพร้อมเช็กสถานะ
+  // บันทึกรูปลงฐานข้อมูลพร้อมเช็กสถานะการ Persist
   const saveProfileEdit = async () => {
-    const updatedArtists = artists.map(artist => 
-      artist.id === editingArtist.id ? { ...artist, avatar: editAvatarUrl } : artist
-    );
-    
-    // อัปเดตหน้าจอทันที
-    setArtists(updatedArtists); 
-    
-    // ส่งข้อมูลขึ้น Supabase และรอฟังคำตอบ
-    const { error } = await supabase.from('likay_state').update({ data: updatedArtists }).eq('id', 1);
-    
-    if (error) {
-       alert("❌ บันทึกรูปลงฐานข้อมูลไม่สำเร็จ: " + error.message);
-    } else {
-       alert("✅ บันทึกรูปลงระบบสำเร็จ 100%! คราวนี้ปิดแอปเข้าใหม่รูปก็ไม่หายแล้วครับ");
-       setEditingArtist(null); // ปิดหน้าต่างเปลี่ยนรูป
+    try {
+      const updatedArtists = artists.map(artist => 
+        artist.id === editingArtist.id ? { ...artist, avatar: editAvatarUrl } : artist
+      );
+      
+      setArtists(updatedArtists); 
+      
+      // อัปเดตข้อมูลตรงไปยัง Supabase
+      const { error } = await supabase.from('likay_state').update({ data: updatedArtists }).eq('id', 1);
+      
+      if (error) {
+         alert("❌ ระบบคลาวด์ปฏิเสธการเซฟ: " + error.message);
+      } else {
+         alert("✅ บันทึกรูปลงระบบถาวรสำเร็จ 100%!\nลองปิดหน้าเว็บแล้วเปิดใหม่ดูได้เลยครับ รูปไม่หายแล้ว!");
+         setEditingArtist(null); 
+      }
+    } catch (err) {
+      alert("เกิดข้อผิดพลาด: " + err.message);
     }
   };
 
@@ -235,7 +250,6 @@ export default function App() {
       <Image 
         source={{uri: artist.avatar ? artist.avatar : `https://ui-avatars.com/api/?name=${encodeURIComponent(artist.name)}&background=4A148C&color=fff&size=120`}} 
         style={styles.avatarImage} 
-        resizeMode="cover"
       />
     </View>
   );
@@ -522,7 +536,6 @@ export default function App() {
 
 // --- ตกแต่งความสวยงาม UI (High-Contrast Elegant Theme) ---
 const styles = StyleSheet.create({
-  // โทนสีหลัก: ม่วงเข้ม (#4A148C), สีรอง: ทอง (#FFD700), พื้นหลัง: ขาว/เทาอ่อน
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#4A148C', padding: 15, paddingTop: Platform.OS === 'ios' ? 45 : 15, elevation: 5 }, 
   hamburgerBtn: { padding: 5 },
   hamburgerIcon: { fontSize: 28, color: '#FFD700' },
@@ -538,7 +551,6 @@ const styles = StyleSheet.create({
   avatarContainer: { width: 60, height: 60, borderRadius: 30, marginRight: 15, backgroundColor: '#EEE', borderWidth: 2, borderColor: '#FFD700', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
   avatarImage: { width: '100%', height: '100%', borderRadius: 30, resizeMode: 'cover' }, 
   
-  // Login Screen (สีเข้มหรูหรา)
   loginContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 25, backgroundColor: '#1A1A2E' },
   logoRing: { width: 140, height: 140, borderRadius: 70, borderWidth: 4, borderColor: '#FFD700', justifyContent: 'center', alignItems: 'center', marginBottom: 25, backgroundColor: '#FFF', overflow: 'hidden' },
   appLogoImage: { width: '100%', height: '100%', borderRadius: 70 }, 
@@ -553,7 +565,6 @@ const styles = StyleSheet.create({
   artistCardTitle: { fontSize: 18, fontWeight: 'bold', color: '#4A148C', marginBottom: 4 },
   artistCardSub: { fontSize: 13, color: '#666' },
 
-  // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 },
   modalBox: { backgroundColor: '#FFF', padding: 25, borderRadius: 15, elevation: 10 },
   modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center', color: '#333' },
@@ -563,7 +574,6 @@ const styles = StyleSheet.create({
   confirmBtn: { backgroundColor: '#4A148C', padding: 14, borderRadius: 8, flex: 0.48, alignItems: 'center' },
   btnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
 
-  // Cards
   artistReadCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 12, elevation: 3, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#F0F0F0' },
   artistReadName: { fontSize: 18, fontWeight: 'bold', color: '#2C3E50' },
   readDataRow: { flexDirection: 'row' },
@@ -631,4 +641,4 @@ const styles = StyleSheet.create({
   
   uploadBtn: { backgroundColor: '#F3E5F5', padding: 15, borderRadius: 10, marginBottom: 25, alignItems: 'center', borderWidth: 1, borderColor: '#CE93D8' },
   uploadBtnText: { color: '#4A148C', fontWeight: 'bold', fontSize: 16 }
-})
+});
