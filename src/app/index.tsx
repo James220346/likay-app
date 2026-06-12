@@ -56,12 +56,13 @@ export default function App() {
     }
   };
 
-  // ☁️ เซฟข้อมูลลง Supabase
+  // ☁️ เซฟข้อมูลลง Supabase (อัปเกรดเป็น upsert ป้องกันฐานข้อมูลว่างเปล่า)
   const saveDataToCloud = async (newData) => {
     setArtists(newData);
-    const { error } = await supabase.from('likay_state').update({ data: newData }).eq('id', 1);
+    // ใช้ upsert: ถ้าไม่มีข้อมูลให้สร้างใหม่ ถ้ามีแล้วให้อัปเดต
+    const { error } = await supabase.from('likay_state').upsert({ id: 1, data: newData });
     if (error) {
-      alert("⚠️ บันทึกไม่สำเร็จ: การเชื่อมต่อคลาวด์มีปัญหาครับ");
+      alert("⚠️ บันทึกข้อมูลไม่สำเร็จ: " + error.message);
     }
   };
 
@@ -135,7 +136,7 @@ export default function App() {
     saveDataToCloud(updatedArtists);
   };
 
-  // 🖼️ เลือกรูปจากเครื่อง (ฉบับบังคับย่อรูปบนหน้าเว็บพิกเซลต่ำพิเศษ ไฟล์ไม่เกิน 5KB ชัวร์ 100%)
+  // 🖼️ เลือกรูปจากเครื่อง (ฉบับแปลงไฟล์เป็นข้อมูลถาวร 100%)
   const pickImage = async () => {
     try {
       let result = await ImagePicker.launchImageLibraryAsync({
@@ -143,39 +144,37 @@ export default function App() {
         allowsEditing: true,
         aspect: [1, 1], 
         quality: 0.1,   
-        base64: true,
       });
 
       if (!result.canceled) {
         const asset = result.assets[0];
 
         if (Platform.OS === 'web') {
-          // ใช้เทคนิค HTML5 Canvas ย่อรูปบนเบราว์เซอร์มือถือ บังคับรูปขนาด 100x100 พิกเซล
-          const img = document.createElement('img');
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 100; 
-            canvas.height = 100;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, 100, 100);
-            
-            // เซฟเป็น JPEG คุณภาพต่ำลง 50% ทำให้ไฟล์เหลือแค่ 3KB-5KB (เซฟลง Supabase สำเร็จแน่นอน)
-            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.5);
-            setEditAvatarUrl(compressedBase64);
-            alert("✅ ย่อขนาดรูปภาพเรียบร้อยแล้ว!\n👉 กรุณากดปุ่ม 'อัปเดตข้อมูล' เพื่อบันทึกลงระบบครับ");
+          // โหลดภาพมาตรวจสอบน้ำหนักไฟล์
+          const response = await fetch(asset.uri);
+          const blob = await response.blob();
+          
+          // 🛑 ถ้ารูปใหญ่เกิน 1MB ให้บล็อกทันที! (ฐานข้อมูลฟรีรับได้จำกัด)
+          if (blob.size > 1000000) {
+              alert("❌ รูปนี้ไฟล์ใหญ่เกินไปครับ (" + (blob.size/1000000).toFixed(1) + " MB)\n\n💡 วิธีแก้: ให้ไปเปิดรูปนี้ในมือถือ -> 'แคปหน้าจอ' -> แล้วเอารูปที่แคปมาอัปโหลดแทนครับ (ไฟล์แคปจะเล็กมากเซฟผ่านแน่นอน)");
+              return;
+          }
+
+          // แปลงรูปเป็นรหัสข้อความสำหรับเซฟลงฐานข้อมูล
+          const reader = new FileReader();
+          reader.readAsDataURL(blob);
+          reader.onloadend = () => {
+            setEditAvatarUrl(reader.result);
           };
-          img.src = asset.uri;
         } else {
           setEditAvatarUrl(`data:image/jpeg;base64,${asset.base64}`);
-          alert("✅ ดึงรูปสำเร็จ!\n👉 กรุณากดปุ่ม 'อัปเดตข้อมูล' เพื่อบันทึกลงระบบครับ");
         }
       }
     } catch (e) {
-      alert("เกิดข้อผิดพลาดในการดึงรูป: " + e.message);
+      alert("เกิดข้อผิดพลาด: " + e.message);
     }
   };
-
-  // บันทึกรูปลงฐานข้อมูลพร้อมเช็กสถานะการ Persist
+    // บันทึกรูปลงฐานข้อมูล
   const saveProfileEdit = async () => {
     try {
       const updatedArtists = artists.map(artist => 
@@ -184,27 +183,18 @@ export default function App() {
       
       setArtists(updatedArtists); 
       
-      // อัปเดตข้อมูลตรงไปยัง Supabase
-      const { error } = await supabase.from('likay_state').update({ data: updatedArtists }).eq('id', 1);
+      // ใช้ upsert บังคับเซฟ
+      const { error } = await supabase.from('likay_state').upsert({ id: 1, data: updatedArtists });
       
       if (error) {
-         alert("❌ ระบบคลาวด์ปฏิเสธการเซฟ: " + error.message);
+         alert("❌ ระบบปฏิเสธการเซฟ: " + error.message);
       } else {
-         alert("✅ บันทึกรูปลงระบบถาวรสำเร็จ 100%!\nลองปิดหน้าเว็บแล้วเปิดใหม่ดูได้เลยครับ รูปไม่หายแล้ว!");
+         alert("✅ บันทึกรูปสำเร็จ 100%!");
          setEditingArtist(null); 
       }
     } catch (err) {
       alert("เกิดข้อผิดพลาด: " + err.message);
     }
-  };
-
-  const getLeaderTotalByDate = () => {
-    let total = 0;
-    artists.forEach(artist => {
-      const { malai } = getTotalsByDate(artist, viewDateStr);
-      total += (malai * 20) / 2;
-    });
-    return total;
   };
 
   // --- UI Components ---
