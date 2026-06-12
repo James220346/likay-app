@@ -166,15 +166,18 @@ export default function App() {
   };
 
   // --- UI Components ---
-  const renderHeader = (title) => (
-    <View style={styles.header}>
-      {role && (
-        <TouchableOpacity onPress={() => setIsMenuOpen(true)} style={styles.hamburgerBtn}>
+ const renderHeader = (title) => (
+    <View style={[styles.header, { zIndex: 999 }]}>
+      {role ? (
+        <TouchableOpacity 
+          onPress={() => setIsMenuOpen(true)} 
+          style={{ padding: 15, zIndex: 1000, marginLeft: -5 }} 
+        >
           <Text style={styles.hamburgerIcon}>☰</Text>
         </TouchableOpacity>
-      )}
+      ) : <View style={{ width: 50 }} />}
       <Text style={styles.headerTitle}>{title}</Text>
-      <View style={{ width: 40 }} />
+      <View style={{ width: 50 }} />
     </View>
   );
 
