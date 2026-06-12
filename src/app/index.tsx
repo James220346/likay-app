@@ -61,7 +61,7 @@ export default function App() {
     setArtists(newData);
     const { error } = await supabase.from('likay_state').update({ data: newData }).eq('id', 1);
     if (error) {
-      alert("⚠️ บันทึกไม่สำเร็จ: รูปภาพอาจจะยังใหญ่เกินไปครับ");
+      alert("⚠️ บันทึกไม่สำเร็จ: รูปภาพอาจจะยังใหญ่เกินไป หรือการเชื่อมต่อมีปัญหาครับ");
     }
   };
 
@@ -135,44 +135,52 @@ export default function App() {
     saveDataToCloud(updatedArtists);
   };
 
-  // 🖼️ เลือกรูปจากเครื่อง (เพิ่มระบบย่อรูป ป้องกันรูปหาย)
+  // 🖼️ เลือกรูปจากเครื่อง (ฉบับแก้บั๊กรูปหาย 100%)
   const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1], 
-      quality: 0.2,   
-      base64: true,
-    });
+    try {
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1], 
+        quality: 0.05, // 📉 บีบอัดรูปขั้นสุด
+        base64: true,
+      });
 
-    if (!result.canceled) {
-      const asset = result.assets[0];
+      if (!result.canceled) {
+        const base64Data = `data:image/jpeg;base64,${result.assets[0].base64}`;
+        
+        // เช็คก่อนว่าไฟล์ยังใหญ่เกินไปไหม (เกิน 500,000 ตัวอักษร)
+        if (base64Data.length > 500000) {
+           alert("❌ รูปนี้ไฟล์ใหญ่เกินไปครับระบบไม่รับ!\n💡 วิธีแก้: ให้ไปเปิดรูปนี้ในอัลบั้มมือถือ -> 'แคปหน้าจอ' -> แล้วเอารูปที่แคปมาอัปโหลดแทนครับ");
+           return;
+        }
 
-      if (Platform.OS === 'web') {
-        const img = document.createElement('img');
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = 150; // ย่อขนาดให้เล็กจิ๋ว
-          canvas.height = 150;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, 150, 150);
-          
-          const smallBase64 = canvas.toDataURL('image/jpeg', 0.5); 
-          setEditAvatarUrl(smallBase64);
-        };
-        img.src = asset.uri;
-      } else {
-        setEditAvatarUrl(`data:image/jpeg;base64,${asset.base64}`);
+        setEditAvatarUrl(base64Data);
+        alert("✅ ดึงรูปสำเร็จ! \nกดปุ่ม 'อัปเดตข้อมูล' ด้านล่างได้เลยครับ");
       }
+    } catch (e) {
+      alert("เกิดข้อผิดพลาด: " + e.message);
     }
   };
 
-  const saveProfileEdit = () => {
+  // บันทึกรูปลงฐานข้อมูลพร้อมเช็กสถานะ
+  const saveProfileEdit = async () => {
     const updatedArtists = artists.map(artist => 
       artist.id === editingArtist.id ? { ...artist, avatar: editAvatarUrl } : artist
     );
-    saveDataToCloud(updatedArtists);
-    setEditingArtist(null);
+    
+    // อัปเดตหน้าจอทันที
+    setArtists(updatedArtists); 
+    
+    // ส่งข้อมูลขึ้น Supabase และรอฟังคำตอบ
+    const { error } = await supabase.from('likay_state').update({ data: updatedArtists }).eq('id', 1);
+    
+    if (error) {
+       alert("❌ บันทึกรูปลงฐานข้อมูลไม่สำเร็จ: " + error.message);
+    } else {
+       alert("✅ บันทึกรูปลงระบบสำเร็จ 100%! คราวนี้ปิดแอปเข้าใหม่รูปก็ไม่หายแล้วครับ");
+       setEditingArtist(null); // ปิดหน้าต่างเปลี่ยนรูป
+    }
   };
 
   const getLeaderTotalByDate = () => {
@@ -185,7 +193,7 @@ export default function App() {
   };
 
   // --- UI Components ---
- const renderHeader = (title) => (
+  const renderHeader = (title) => (
     <View style={[styles.header, { position: 'relative', zIndex: 9999 }]}>
       {role && (
         <TouchableOpacity 
@@ -236,7 +244,7 @@ export default function App() {
   const renderLoginScreen = () => (
     <View style={styles.loginContainer}>
       <View style={styles.logoRing}>
-        <Image source={require('../../assets/images/profile.jpg')} style={styles.appLogoImage} />
+        <Image source={require('../../assets/images/likay_logo.png')} style={styles.appLogoImage} />
       </View>
       <Text style={styles.appName}>ระบบบัญชีคณะลิเก</Text>
       <Text style={styles.appSubName}>✨ บริหารงานโดย {LEADER_NAME} ✨</Text>
@@ -528,7 +536,7 @@ const styles = StyleSheet.create({
 
   profileRow: { flexDirection: 'row', alignItems: 'center' },
   avatarContainer: { width: 60, height: 60, borderRadius: 30, marginRight: 15, backgroundColor: '#EEE', borderWidth: 2, borderColor: '#FFD700', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
-  avatarImage: { width: '100%', height: '100%' }, 
+  avatarImage: { width: '100%', height: '100%', borderRadius: 30, resizeMode: 'cover' }, 
   
   // Login Screen (สีเข้มหรูหรา)
   loginContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 25, backgroundColor: '#1A1A2E' },
@@ -577,7 +585,6 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   actionLabel: { fontSize: 14, color: '#555', width: 45, fontWeight: 'bold' },
   
-  // ปรับสีปุ่มให้เห็นชัดเจนไม่หลงแน่นอน
   btnSmallMalai: { backgroundColor: '#E91E63', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 6, flex: 0.23, alignItems: 'center', elevation: 2 },
   btnSmallCash: { backgroundColor: '#4CAF50', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 6, flex: 0.23, alignItems: 'center', elevation: 2 },
   btnSmallText: { color: '#FFF', fontWeight: 'bold', fontSize: 15 },
@@ -624,4 +631,4 @@ const styles = StyleSheet.create({
   
   uploadBtn: { backgroundColor: '#F3E5F5', padding: 15, borderRadius: 10, marginBottom: 25, alignItems: 'center', borderWidth: 1, borderColor: '#CE93D8' },
   uploadBtnText: { color: '#4A148C', fontWeight: 'bold', fontSize: 16 }
-});
+})
