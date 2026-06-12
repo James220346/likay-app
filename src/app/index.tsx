@@ -74,6 +74,7 @@ export default function App() {
 
   const getTotalsByDate = (artist, targetDateStr) => {
     let malai = 0; let cash = 0;
+    // โค้ดตรงนี้สำคัญมาก ต้องมี || [] เพื่อกันจอขาว
     const dayHistory = artist.history.filter(h => h.date === targetDateStr);
     dayHistory.forEach(item => {
       if (item.type === 'malai') malai += item.amount;
