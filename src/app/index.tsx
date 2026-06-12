@@ -167,17 +167,27 @@ export default function App() {
 
   // --- UI Components ---
  const renderHeader = (title) => (
-    <View style={[styles.header, { zIndex: 999 }]}>
-      {role ? (
+    <View style={[styles.header, { position: 'relative', zIndex: 9999 }]}>
+      {role && (
         <TouchableOpacity 
           onPress={() => setIsMenuOpen(true)} 
-          style={{ padding: 15, zIndex: 1000, marginLeft: -5 }} 
+          style={{ 
+            position: 'absolute', 
+            left: 10, 
+            bottom: 12, 
+            width: 50, 
+            height: 50, 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            zIndex: 10000 
+          }}
         >
           <Text style={styles.hamburgerIcon}>☰</Text>
         </TouchableOpacity>
-      ) : <View style={{ width: 50 }} />}
-      <Text style={styles.headerTitle}>{title}</Text>
-      <View style={{ width: 50 }} />
+      )}
+      <View style={{ flex: 1, alignItems: 'center' }}>
+        <Text style={styles.headerTitle}>{title}</Text>
+      </View>
     </View>
   );
 
