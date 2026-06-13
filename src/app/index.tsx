@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import * as ImagePicker from 'expo-image-picker';
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Dimensions, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 // 🔑 เชื่อมต่อ Supabase
 const supabaseUrl = 'https://aaqxswdaxdcstbdrncyf.supabase.co';
@@ -34,6 +34,9 @@ export default function App() {
   const [editingArtist, setEditingArtist] = useState(null);
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
   const [currentDateObj, setCurrentDateObj] = useState(new Date());
+  
+  // 🚨 State ใหม่สำหรับ Pop-up แจ้งเตือนลบข้อมูลสุดหรู
+  const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
 
   const getThaiDateStr = (dateObj) => dateObj.toLocaleDateString('th-TH');
   const viewDateStr = getThaiDateStr(currentDateObj);
@@ -84,13 +87,12 @@ export default function App() {
     return { malai, cash, dayHistory };
   };
 
-  // 🛡️ กฎแบ่งเงินหัวหน้า: ได้ส่วนแบ่ง 50% เฉพาะตอนที่ยอดมาลัยศิลปิน >= 10 พวง
   const getLeaderTotalByDate = () => {
     let total = 0;
     validArtists.forEach(artist => {
       const { malai } = getTotalsByDate(artist, viewDateStr);
       if (artist.name !== LEADER_NAME && malai >= 10) {
-          total += (malai * 10); // หักเข้ากองกลาง 10 บาท/พวง
+          total += (malai * 10); 
       }
     });
     return total;
@@ -152,22 +154,12 @@ export default function App() {
     saveDataToCloud(updatedArtists);
   };
 
-  const resetTestData = () => {
-    Alert.alert(
-      "⚠️ ยืนยันการล้างข้อมูล",
-      "คุณต้องการลบยอดเงินและรายการทั้งหมดกลับไปเริ่มต้นใหม่ใช่หรือไม่?",
-      [
-        { text: "ยกเลิก", style: "cancel" },
-        { 
-          text: "ล้างข้อมูล", style: "destructive", 
-          onPress: () => {
-            saveDataToCloud(defaultArtists);
-            alert("✅ ล้างข้อมูลเรียบร้อย เริ่มต้นใหม่ได้เลยครับ!");
-            setIsMenuOpen(false);
-          }
-        }
-      ]
-    );
+  // 🛡️ ฟังก์ชันสั่งเคลียร์ข้อมูลจริง ยิงตรงเข้าคลาวด์
+  const executeResetAllData = () => {
+    saveDataToCloud(defaultArtists);
+    setShowResetConfirmModal(false);
+    setIsMenuOpen(false);
+    alert("✨ ล้างข้อมูลทดลองสำเร็จ! ระบบพร้อมใช้งานจริงแล้วครับ");
   };
 
   const pickImage = async () => {
@@ -207,7 +199,7 @@ export default function App() {
 
   // --- UI Components ---
   const renderHeader = (title) => (
-    <View style={[styles.header, { position: 'relative', zIndex: 9999 }]}>
+    <View style={styles.header}>
       {role && (
         <TouchableOpacity onPress={() => setIsMenuOpen(true)} style={styles.hamburgerBtn}>
           <Text style={styles.hamburgerIcon}>☰</Text>
@@ -260,12 +252,12 @@ export default function App() {
 
       <Modal visible={showPinModal} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>🔒 รหัสผ่านหัวหน้าคณะ</Text>
-            <TextInput style={styles.pinInput} keyboardType="number-pad" secureTextEntry={true} maxLength={4} value={pinInput} onChangeText={setPinInput} placeholder="••••" placeholderTextColor="#CCC" autoFocus={true} />
+          <View style={styles.luxuryPopupBox}>
+            <Text style={styles.luxuryPopupTitle}>🔒 รหัสผ่านหัวหน้าคณะ</Text>
+            <TextInput style={styles.pinInput} keyboardType="number-pad" secureTextEntry={true} maxLength={4} value={pinInput} onChangeText={setPinInput} placeholder="••••" placeholderTextColor="#999" autoFocus={true} />
             <View style={styles.modalActionRow}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowPinModal(false)}><Text style={styles.btnText}>ยกเลิก</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.confirmBtn} onPress={handleAdminLogin}><Text style={styles.btnText}>เข้าสู่ระบบ</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.luxuryCancelBtn} onPress={() => setShowPinModal(false)}><Text style={styles.btnText}>ยกเลิก</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.luxuryConfirmBtn} onPress={handleAdminLogin}><Text style={styles.btnText}>เข้าสู่ระบบ</Text></TouchableOpacity>
             </View>
           </View>
         </View>
@@ -292,7 +284,6 @@ export default function App() {
         const isToday = item.date === viewDateStr;
         const dailyTotal = dailyMalaiTotals[item.date] || 0;
         
-        // 🛡️ กฎการคำนวณ Dashboard ที่แม่นยำ
         const isSplit = artist.name !== LEADER_NAME && dailyTotal >= 10;
         const artistRate = isSplit ? 10 : 20;
         const leaderRate = isSplit ? 10 : 0;
@@ -321,22 +312,22 @@ export default function App() {
     });
 
     return (
-      <View style={{ flex: 1, backgroundColor: '#F4F6F9' }}>
+      <View style={{ flex: 1, backgroundColor: '#F5F5FA' }}>
         {renderHeader('📊 แดชบอร์ดการเงิน')}
         {renderDateSelector()}
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.dashboardCard}>
-            <Text style={styles.dashTitle}>📍 สรุปยอดวันนี้ ({viewDateStr})</Text>
-            <Text style={styles.dashText}>🌸 มาลัยรวม: {todayMalai} พวง</Text>
-            <Text style={styles.dashText}>💰 เงินสดรวม: {todayCash.toLocaleString()} บ.</Text>
+            <Text style={styles.dashTitle}>📍 สรุปยอดสะสมวันนี้ ({viewDateStr})</Text>
+            <View style={styles.dashDetailRow}><Text style={styles.dashText}>🌸 มาลัยรวมทั้งหมด:</Text><Text style={styles.dashValue}>{todayMalai} พวง</Text></View>
+            <View style={styles.dashDetailRow}><Text style={styles.dashText}>💰 รางวัลเงินสดรวม:</Text><Text style={styles.dashValue}>{todayCash.toLocaleString()} บาท</Text></View>
             <View style={styles.dashLine} />
-            <Text style={styles.dashHighlight}>👑 ส่วนแบ่งหัวหน้า: {todayLeaderShare.toLocaleString()} บ.</Text>
-            <Text style={{fontSize: 11, color: '#888'}}>*หัก 50% เฉพาะศิลปินที่ได้มาลัย 10 พวงขึ้นไป</Text>
+            <Text style={styles.dashHighlight}>👑 ส่วนแบ่งเข้าวงการคลัง: {todayLeaderShare.toLocaleString()} บ.</Text>
+            <Text style={{fontSize: 11, color: '#AAA', fontStyle: 'italic', marginTop: 5}}>*หักแบ่ง 50% เฉพาะตอนศิลปินได้มาลัย 10 พวงขึ้นไป/วัน เท่านั้น</Text>
           </View>
-          <View style={[styles.dashboardCard, {backgroundColor: '#FFF3E0', borderColor: '#FF9800', borderWidth: 1}]}>
-            <Text style={[styles.dashTitle, {color: '#E65100'}]}>⏳ ยอดรวมค้างโอนศิลปินทั้งหมด</Text>
-            <Text style={{fontSize: 32, fontWeight: 'bold', color: '#E65100', marginVertical: 10, textAlign: 'center'}}>{totalPendingPay.toLocaleString()} บาท</Text>
-            <Text style={{fontSize: 12, color: '#795548', textAlign: 'center'}}>*เช็กยอดรายคนและกดจ่ายเงินได้ที่เมนู 'สรุปบัญชี'</Text>
+          <View style={[styles.dashboardCard, {backgroundColor: '#FFF8F0', borderColor: '#FF9800', borderWidth: 1.5}]}>
+            <Text style={[styles.dashTitle, {color: '#E65100'}]}>⏳ ยอดค้างโอนศิลปินรวมทั้งหมด</Text>
+            <Text style={{fontSize: 36, fontWeight: 'bold', color: '#E65100', marginVertical: 12, textAlign: 'center'}}>{totalPendingPay.toLocaleString()} บาท</Text>
+            <Text style={{fontSize: 12, color: '#E65100', textAlign: 'center', fontWeight: 'bold'}}>*กดโอนเงินสดรายคนได้ที่เมนู 'บัญชีหลังบ้าน' ยอดจะหายไปทันที</Text>
           </View>
           <View style={{height: 40}} />
         </ScrollView>
@@ -345,7 +336,7 @@ export default function App() {
   };
 
   const renderArtistScreen = () => (
-    <View style={{ flex: 1, backgroundColor: '#F4F6F9' }}>
+    <View style={{ flex: 1, backgroundColor: '#F5F5FA' }}>
       {renderHeader('บอร์ดสรุปยอดศิลปิน')}
       {renderDateSelector()}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -361,20 +352,19 @@ export default function App() {
                 <View>
                   <Text style={styles.artistReadName}>{artist.name}</Text>
                   <TouchableOpacity style={styles.editProfileBtn} onPress={() => { setEditingArtist(artist); setEditAvatarUrl(artist.avatar); }}>
-                    <Text style={styles.editProfileText}>✏️ เปลี่ยนรูป</Text>
+                    <Text style={styles.editProfileText}>✏️ อัปเดตรูปภาพ</Text>
                   </TouchableOpacity>
                 </View>
               </View>
               <View style={styles.readDataRow}>
                 <View style={styles.readDataBox}>
-                  <Text style={styles.readDataLabel}>🌸 มาลัย</Text>
-                  <Text style={[styles.readDataValue, {color: '#E91E63'}]}>{malai}</Text>
-                  <Text style={{fontSize: 10, color: '#888'}}>({rate} บ./พวง)</Text>
+                  <Text style={styles.readDataLabel}>🌸 มาลัยรวม</Text>
+                  <Text style={[styles.readDataValue, {color: '#E91E63'}]}>{malai} พวง</Text>
+                  <Text style={{fontSize: 10, color: '#999'}}>({rate} บ./พวง)</Text>
                 </View>
                 <View style={styles.readDataBox}>
-                  <Text style={styles.readDataLabel}>💰 เงินสด</Text>
-                  <Text style={[styles.readDataValue, {color: '#2E7D32'}]}>{cash}</Text>
-                  <Text style={{fontSize: 10, color: '#888'}}>(รับเต็ม 100%)</Text>
+                  <Text style={styles.readDataLabel}>💰 รางวัลสด</Text>
+                  <Text style={[styles.readDataValue, {color: '#2E7D32'}]}>{cash.toLocaleString()} บ.</Text>
                 </View>
               </View>
             </View>
@@ -386,31 +376,29 @@ export default function App() {
   );
 
   const renderAddTipScreen = () => (
-    <View style={{ flex: 1, backgroundColor: '#F4F6F9' }}>
-      {renderHeader('หน้าเวที: บันทึกยอด')}
+    <View style={{ flex: 1, backgroundColor: '#F5F5FA' }}>
+      {renderHeader('หน้าเวที: บันทึกยอดรางวัล')}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.infoBanner}>
-          <Text style={styles.infoBannerText}>กำลังบันทึกบัญชีของวันที่: {todayStr}</Text>
+          <Text style={styles.infoBannerText}>🎭 คืนนี้กำลังบันทึกรายได้ของวันที่: {todayStr}</Text>
         </View>
         <View style={styles.addNameCompact}>
-          <TextInput style={styles.inputCompact} placeholder="พิมพ์ชื่อรับเชิญใหม่..." value={newArtistName} onChangeText={setNewArtistName} />
+          <TextInput style={styles.inputCompact} placeholder="พิมพ์ชื่อรับเชิญใหม่..." value={newArtistName} onChangeText={setNewArtistName} placeholderTextColor="#BBB" />
           <TouchableOpacity style={styles.addBtnCompact} onPress={addNewArtist}>
             <Text style={styles.addBtnText}>+ เพิ่มศิลปิน</Text>
           </TouchableOpacity>
         </View>
 
         {validArtists.map(artist => {
-          const { malai, cash, dayHistory } = getTotalsByDate(artist, todayStr);
+          const { malai, cash } = getTotalsByDate(artist, todayStr);
           return (
             <View key={artist.id} style={styles.adminCard}>
               <View style={styles.adminCardHeader}>
                 <View style={styles.profileRow}>
                   {renderAvatar(artist)}
-                  <View>
-                    <Text style={styles.adminArtistName}>{artist.name}</Text>
-                  </View>
+                  <Text style={styles.adminArtistName}>{artist.name}</Text>
                 </View>
-                <Text style={styles.adminSummaryText}>🌸 {malai}  |  💰 {cash}</Text>
+                <Text style={styles.adminSummaryText}>🌸 {malai} พวง  |  💰 {cash} บ.</Text>
               </View>
               
               <View style={styles.actionRow}>
@@ -435,29 +423,50 @@ export default function App() {
         })}
         <View style={{height: 40}} />
       </ScrollView>
+
+      {/* Pop-up คัดเลือกแม่ยก/ผู้ให้รางวัลดีไซน์หรูหรา */}
+      <Modal visible={isModalVisible} transparent={true} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.luxuryPopupBox}>
+            <Text style={styles.luxuryPopupTitle}>✨ บันทึกรายนามผู้ให้รางวัล ✨</Text>
+            <View style={styles.vipRow}>
+              {vipNames.map((name, index) => (
+                <TouchableOpacity key={index} style={styles.vipBtn} onPress={() => confirmTip(name)}>
+                  <Text style={styles.vipBtnText}>{name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput style={styles.modalInput} placeholder="✍️ หรือพิมพ์ระบุชื่อใหม่อื่นๆ..." value={customGiverName} onChangeText={setCustomGiverName} placeholderTextColor="#BBB" />
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity style={styles.luxuryCancelBtn} onPress={() => setIsModalVisible(false)}><Text style={styles.btnText}>ยกเลิก</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.luxuryConfirmBtn} onPress={() => confirmTip(null)}><Text style={styles.btnText}>👑 บันทึกยอด</Text></TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 
   const renderSummaryScreen = () => (
-    <View style={{ flex: 1, backgroundColor: '#F4F6F9' }}>
-      {renderHeader('บัญชีหลังบ้าน')}
+    <View style={{ flex: 1, backgroundColor: '#F5F5FA' }}>
+      {renderHeader('บัญชีหลังบ้าน / เคลียร์ยอด')}
       {renderDateSelector()}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        
+        <View style={styles.leaderCard}>
+          <Text style={styles.leaderTitle}>👑 ส่วนแบ่งเข้าคลังรวมประจำวัน</Text>
+          <Text style={styles.leaderMoney}>{getLeaderTotalByDate().toLocaleString()} บาท</Text>
+          <Text style={styles.leaderSub}>(คำนวณจากยอดมาลัยหักแบ่ง 50% ของวันนี้ทั้งหมด)</Text>
+        </View>
+
         {validArtists.map(artist => {
           const { malai, cash, dayHistory } = getTotalsByDate(artist, viewDateStr);
-          
-          // 🛡️ กรองเฉพาะรายการที่ "ยังไม่จ่าย" มาแสดง
           const unpaidHistory = dayHistory.filter(h => !h.isPaid);
 
-          // ซ่อนการ์ดถ้ายอดเป็น 0 และไม่มีรายการค้าง
           if (malai === 0 && cash === 0 && unpaidHistory.length === 0) return null;
 
-          // คำนวณเรทเงินมาลัย
           const isSplit = artist.name !== LEADER_NAME && malai >= 10;
           const rate = isSplit ? 10 : 20;
 
-          // คำนวณยอดเงินเฉพาะที่ "ยังไม่ได้จ่าย"
           let unpaidMalai = 0; let unpaidCash = 0;
           unpaidHistory.forEach(item => {
             if (item.type === 'malai') unpaidMalai += item.amount;
@@ -477,36 +486,35 @@ export default function App() {
               </View>
               
               <View style={styles.sumBox}>
-                <Text style={{fontWeight: 'bold', color: '#4A148C', marginBottom: 5}}>📌 ยอดรวมที่หาได้วันนี้ (รวมที่จ่ายแล้ว):</Text>
+                <Text style={{fontWeight: 'bold', color: '#4A148C', marginBottom: 5, fontSize: 13}}>📈 ยอดสรุปทั้งหมดของวันนี้:</Text>
                 {artist.name === LEADER_NAME ? (
-                  <Text style={styles.sumText}>🌸 มาลัย {malai} พวง ↳ (รับเต็มไม่มีหัก): <Text style={{fontWeight:'bold', color:'#333'}}>{malai * 20}</Text> บ.</Text>
+                  <Text style={styles.sumText}>🌸 มาลัยสะสม {malai} พวง ↳ (หัวหน้ารับเต็ม 100%): <Text style={{fontWeight:'bold', color:'#4A148C'}}>{malai * 20}</Text> บ.</Text>
                 ) : (
                   <Text style={styles.sumText}>
-                    🌸 มาลัย {malai} พวง ↳ {malai >= 10 ? `แบ่งเข้าวง 50%: ` : `รับเต็ม 100%: `}
-                    <Text style={{fontWeight:'bold', color:'#333'}}>{malai * rate}</Text> บ.
+                    🌸 มาลัยสะสม {malai} พวง ↳ {malai >= 10 ? `แบ่งเข้าวง 50%: ` : `ศิลปินรับเต็ม 100%: `}
+                    <Text style={{fontWeight:'bold', color:'#4A148C'}}>{malai * rate}</Text> บ.
                   </Text>
                 )}
-                <Text style={styles.sumText}>💰 รางวัลสด: <Text style={{fontWeight:'bold', color:'#333'}}>{cash}</Text> บ.</Text>
-                {malai >= 10 && <Text style={styles.sumBonus}>🎉 โบนัสแตก (10 พวง): +100 บ.</Text>}
+                <Text style={styles.sumText}>💰 รางวัลเงินสดสะสม: <Text style={{fontWeight:'bold', color:'#4A148C'}}>{cash.toLocaleString()}</Text> บาท</Text>
+                {malai >= 10 && <Text style={styles.sumBonus}>🎉 โบนัสมาลัยแตกประจำวัน: +100 บาท</Text>}
               </View>
               
               <View style={styles.historyBox}>
-                <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10}}>
-                   <Text style={styles.historyTitle}>⏳ รายการค้างจ่าย (กดเพื่อโอน)</Text>
-                   <Text style={styles.finalPayText}>รวมยอดโอน: {finalPay.toLocaleString()} บ.</Text>
+                <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
+                   <Text style={styles.historyTitle}>⏳ รายการค้างโอนเงินสด</Text>
+                   <Text style={styles.finalPayText}>ยอดโอนรวม: {finalPay.toLocaleString()} บ.</Text>
                 </View>
 
-                {/* ถ้ารายการค้างจ่ายหมดแล้ว ให้ขึ้นข้อความสีเขียว */}
                 {unpaidHistory.length === 0 ? (
-                  <View style={{backgroundColor: '#E8F5E9', padding: 10, borderRadius: 8, alignItems: 'center'}}>
-                    <Text style={{color: '#2E7D32', fontWeight: 'bold'}}>✅ จ่ายครบหมดแล้ว (ซ่อนรายการอัตโนมัติ)</Text>
+                  <View style={styles.paidSuccessBanner}>
+                    <Text style={{color: '#2E7D32', fontWeight: 'bold', fontSize: 13}}>✅ เคลียร์โอนเงินสดครบหมดแล้ว (ซ่อนการ์ดอัตโนมัติ)</Text>
                   </View>
                 ) : (
                   unpaidHistory.map(item => (
                     <TouchableOpacity key={item.id} style={[styles.historyRow, styles.historyPendingBg]} onPress={() => togglePaymentStatus(artist.id, item.id)}>
                       <Text style={styles.historyText} numberOfLines={1}>• {item.text}</Text>
-                      <View style={{backgroundColor: '#4A148C', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12}}>
-                        <Text style={{color: '#FFF', fontSize: 11, fontWeight: 'bold'}}>คลิกเพื่อจ่าย</Text>
+                      <View style={styles.clickToPayBadge}>
+                        <Text style={{color: '#FFF', fontSize: 11, fontWeight: 'bold'}}>💸 กดจ่ายเงิน</Text>
                       </View>
                     </TouchableOpacity>
                   ))
@@ -529,56 +537,76 @@ export default function App() {
       {currentScreen === 'addTip' && renderAddTipScreen()}
       {currentScreen === 'summary' && renderSummaryScreen()}
 
+      {/* Pop-up แก้ไขรูปภาพดีไซน์หรู */}
       <Modal visible={!!editingArtist} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>อัปโหลดรูปโปรไฟล์ใหม่</Text>
+          <View style={styles.luxuryPopupBox}>
+            <Text style={styles.luxuryPopupTitle}>📸 ปรับเปลี่ยนรูปโปรไฟล์ศิลปิน</Text>
             {editAvatarUrl ? (
-              <Image source={{ uri: editAvatarUrl }} style={{ width: 120, height: 120, borderRadius: 60, alignSelf: 'center', marginBottom: 20, borderWidth: 2, borderColor: '#4A148C' }} />
+              <Image source={{ uri: editAvatarUrl }} style={styles.luxuryAvatarPreview} />
             ) : (
-              <View style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: '#EEE', alignSelf: 'center', marginBottom: 20, justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{color: '#999'}}>ไม่มีรูป</Text>
-              </View>
+              <View style={styles.luxuryAvatarPlaceholder}><Text style={{color: '#999'}}>ยังไม่มีรูปภาพ</Text></View>
             )}
-            <TouchableOpacity style={styles.uploadBtn} onPress={pickImage}><Text style={styles.uploadBtnText}>📸 เปิดอัลบั้มรูปภาพ</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.uploadBtn} onPress={pickImage}><Text style={styles.uploadBtnText}>เลือกจากคลังรูปภาพมือถือ</Text></TouchableOpacity>
             <View style={styles.modalActionRow}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditingArtist(null)}><Text style={styles.btnText}>ยกเลิก</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.confirmBtn, {backgroundColor: '#4A148C'}]} onPress={saveProfileEdit}><Text style={styles.btnText}>อัปเดตข้อมูล</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.luxuryCancelBtn} onPress={() => setEditingArtist(null)}><Text style={styles.btnText}>ยกเลิก</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.luxuryConfirmBtn} onPress={saveProfileEdit}><Text style={styles.btnText}>อัปเดตข้อมูล</Text></TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
+      {/* 🚨 Pop-up แจ้งเตือนลบข้อมูลทดลองตัวใหม่ (การันตีความสวยงามและกดลบได้ชัวร์ 100%) */}
+      <Modal visible={showResetConfirmModal} transparent={true} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.luxuryPopupBox, {borderColor: '#D32F2F', borderWidth: 2}]}>
+            <Text style={[styles.luxuryPopupTitle, {color: '#D32F2F'}]}>⚠️ คำเตือนระบบขั้นเด็ดขาด</Text>
+            <Text style={styles.resetModalWarningText}>คุณสนธยาต้องการทำการลบยอดมาลัย รางวัลเงินสด และประวัติทดสอบทั้งหมดในระบบ เพื่อเริ่มเก็บเงินจริงคืนนี้ใช่หรือไม่? ข้อมูลทั้งหมดบนคลาวด์จะหายไปทันที!</Text>
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity style={styles.luxuryCancelBtn} onPress={() => setShowResetConfirmModal(false)}>
+                <Text style={styles.btnText}>ยกเลิก</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.luxuryConfirmBtn, {backgroundColor: '#D32F2F'}]} onPress={executeResetAllData}>
+                <Text style={styles.btnText}>🔥 ยืนยันลบข้อมูล</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Pop-up สไลด์เมนูด้านข้างระดับ VIP */}
       <Modal visible={isMenuOpen} transparent={true} animationType="fade">
         <View style={styles.menuOverlay}>
           <View style={styles.menuBoxFull}>
-            <Text style={[styles.menuTitle, {fontSize: 24, marginBottom: 40}]}>เมนูระบบ 🎭</Text>
+            <Text style={styles.menuMainTitle}>แผงควบคุมระบบ 🎭</Text>
             {role === 'admin' && (
               <>
                 <TouchableOpacity style={styles.menuItem} onPress={() => { setCurrentScreen('dashboard'); setIsMenuOpen(false); }}>
-                  <Text style={styles.menuItemText}>📊 แดชบอร์ดการเงิน</Text>
+                  <Text style={styles.menuItemText}>📊 แดชบอร์ดการเงินวง</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.menuItem} onPress={() => { setCurrentScreen('addTip'); setIsMenuOpen(false); }}>
-                  <Text style={styles.menuItemText}>📝 ไปหน้าเวที (บันทึกยอด)</Text>
+                  <Text style={styles.menuItemText}>📝 หน้าเวที (บันทึกยอด)</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.menuItem} onPress={() => { setCurrentScreen('summary'); setIsMenuOpen(false); }}>
-                  <Text style={styles.menuItemText}>💰 ไปหลังบ้าน (สรุปบัญชี / โอนเงิน)</Text>
+                  <Text style={styles.menuItemText}>💰 บัญชีหลังบ้าน / โอนเงิน</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.menuItem, {marginTop: 30, backgroundColor: '#FFF3E0', borderRadius: 8}]} onPress={resetTestData}>
-                  <Text style={[styles.menuItemText, {color: '#E65100', fontWeight: 'bold'}]}>🗑️ ล้างข้อมูลทดลองทิ้งทั้งหมด</Text>
+                
+                {/* ปุ่มลบข้อมูลที่ลิงก์เข้า Pop-up ตัวใหม่ */}
+                <TouchableOpacity style={styles.menuResetBtn} onPress={() => { setShowResetConfirmModal(true); }}>
+                  <Text style={styles.menuResetBtnText}>🗑️ ล้างข้อมูลทดลอง (เริ่มงานจริง)</Text>
                 </TouchableOpacity>
               </>
             )}
             {role === 'artist' && (
               <TouchableOpacity style={styles.menuItem} onPress={() => { setIsMenuOpen(false); }}>
-                <Text style={styles.menuItemText}>🌟 บอร์ดศิลปิน</Text>
+                <Text style={styles.menuItemText}>🌟 บอร์ดสรุปยอดศิลปิน</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={[styles.menuItem, {borderBottomWidth: 0, marginTop: 20, backgroundColor: '#FFEBEE', borderRadius: 10}]} onPress={logout}>
-              <Text style={[styles.menuItemText, {color: '#D32F2F', fontWeight: 'bold', textAlign: 'center'}]}>🚪 ออกจากระบบ</Text>
+            <TouchableOpacity style={styles.menuLogoutBtn} onPress={logout}>
+              <Text style={styles.menuLogoutText}>🚪 ออกจากระบบ</Text>
             </TouchableOpacity>
             <View style={{flex: 1}} />
-            <TouchableOpacity style={styles.closeMenuBtn} onPress={() => setIsMenuOpen(false)}><Text style={styles.closeMenuText}>✕ ปิดหน้าต่าง</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.closeMenuBtn} onPress={() => setIsMenuOpen(false)}><Text style={styles.closeMenuText}>✕ ปิดหน้าต่างเมนู</Text></TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -586,111 +614,121 @@ export default function App() {
   );
 }
 
-// --- ตกแต่งความสวยงาม UI ---
+// --- สไตล์การตกแต่งโมเดิร์นคลาสสิก (ม่วง-ทอง หรูหรา ไร้ที่ติ) ---
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#4A148C', padding: 15, paddingTop: Platform.OS === 'ios' ? 45 : 15, elevation: 5 }, 
-  hamburgerBtn: { position: 'absolute', left: 10, bottom: 8, width: 50, height: 50, justifyContent: 'center', alignItems: 'center', zIndex: 10000 },
-  hamburgerIcon: { fontSize: 28, color: '#FFD700' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#FFF', letterSpacing: 1 },
-  content: { padding: 12 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#3A0F63', padding: 16, paddingTop: Platform.OS === 'ios' ? 45 : 16, elevation: 6, borderBottomWidth: 2, borderBottomColor: '#FFD700' }, 
+  hamburgerBtn: { position: 'absolute', left: 12, bottom: 10, width: 45, height: 45, justifyContent: 'center', alignItems: 'center', zIndex: 10000 },
+  hamburgerIcon: { fontSize: 26, color: '#FFD700', fontWeight: 'bold' },
+  headerTitle: { fontSize: 19, fontStyle: 'normal', fontWeight: 'bold', color: '#FFD700', letterSpacing: 1.2 },
+  content: { padding: 14 },
   
-  dateSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFF', padding: 15, borderBottomWidth: 1, borderColor: '#E0E0E0', elevation: 2 },
-  dateBtn: { backgroundColor: '#F3E5F5', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 20 },
+  dateSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFF', padding: 14, borderBottomWidth: 1, borderColor: '#E5E5E5', elevation: 2 },
+  dateBtn: { backgroundColor: '#F3E5F5', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 25, borderWidth: 1, borderColor: '#E1BEE7' },
   dateBtnText: { color: '#4A148C', fontWeight: 'bold', fontSize: 12 },
-  dateText: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+  dateText: { fontSize: 16, fontWeight: 'bold', color: '#3A0F63' },
 
   profileRow: { flexDirection: 'row', alignItems: 'center' },
-  avatarContainer: { width: 60, height: 60, borderRadius: 30, marginRight: 15, backgroundColor: '#EEE', borderWidth: 2, borderColor: '#FFD700', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
-  avatarImage: { width: '100%', height: '100%', borderRadius: 30, resizeMode: 'cover' }, 
+  avatarContainer: { width: 56, height: 56, borderRadius: 28, marginRight: 14, backgroundColor: '#FFF', borderWidth: 2, borderColor: '#FFD700', overflow: 'hidden', justifyContent: 'center', alignItems: 'center', elevation: 3 },
+  avatarImage: { width: '100%', height: '100%', borderRadius: 28, resizeMode: 'cover' }, 
   
-  loginContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 25, backgroundColor: '#1A1A2E' },
-  logoRing: { width: 140, height: 140, borderRadius: 70, borderWidth: 4, borderColor: '#FFD700', justifyContent: 'center', alignItems: 'center', marginBottom: 25, backgroundColor: '#FFF', overflow: 'hidden' },
+  loginContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 25, backgroundColor: '#130526' },
+  logoRing: { width: 140, height: 140, borderRadius: 70, borderWidth: 4, borderColor: '#FFD700', justifyContent: 'center', alignItems: 'center', marginBottom: 25, backgroundColor: '#FFF', overflow: 'hidden', elevation: 10 },
   appLogoImage: { width: '100%', height: '100%', borderRadius: 70 }, 
-  appName: { fontSize: 32, fontWeight: '900', color: '#FFD700', marginBottom: 5, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: {width: 1, height: 1}, textShadowRadius: 3 },
-  appSubName: { fontSize: 16, color: '#E0E0E0', marginBottom: 45, letterSpacing: 1 },
+  appName: { fontSize: 34, fontWeight: '900', color: '#FFD700', marginBottom: 4, letterSpacing: 1 },
+  appSubName: { fontSize: 15, color: '#E1BEE7', marginBottom: 50, letterSpacing: 1 },
   
-  loginCardAdmin: { backgroundColor: '#4A148C', width: '100%', paddingVertical: 20, borderRadius: 12, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: '#7B1FA2', elevation: 5 },
-  loginCardTitle: { fontSize: 18, fontWeight: 'bold', color: '#FFD700', marginBottom: 4 },
-  loginCardSub: { fontSize: 13, color: '#E1BEE7' },
+  loginCardAdmin: { backgroundColor: '#3A0F63', width: '100%', paddingVertical: 22, borderRadius: 16, alignItems: 'center', marginBottom: 22, borderWidth: 1.5, borderColor: '#FFD700', elevation: 6 },
+  loginCardTitle: { fontSize: 19, fontWeight: 'bold', color: '#FFD700', marginBottom: 4 },
+  loginCardSub: { fontSize: 12, color: '#E1BEE7' },
   
-  loginCardArtist: { backgroundColor: '#FFF', width: '100%', paddingVertical: 20, borderRadius: 12, alignItems: 'center', borderWidth: 2, borderColor: '#4A148C' },
-  artistCardTitle: { fontSize: 18, fontWeight: 'bold', color: '#4A148C', marginBottom: 4 },
-  artistCardSub: { fontSize: 13, color: '#666' },
+  loginCardArtist: { backgroundColor: '#FFF', width: '100%', paddingVertical: 22, borderRadius: 16, alignItems: 'center', borderWidth: 2, borderColor: '#3A0F63', elevation: 4 },
+  artistCardTitle: { fontSize: 19, fontWeight: 'bold', color: '#3A0F63', marginBottom: 4 },
+  artistCardSub: { fontSize: 12, color: '#777' },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 20 },
-  modalBox: { backgroundColor: '#FFF', padding: 25, borderRadius: 15, elevation: 10 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center', color: '#333' },
-  pinInput: { backgroundColor: '#F9F9F9', fontSize: 32, textAlign: 'center', padding: 15, borderRadius: 10, marginBottom: 25, letterSpacing: 15, color: '#4A148C', borderWidth: 1, borderColor: '#DDD' },
-  modalActionRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  cancelBtn: { backgroundColor: '#9E9E9E', padding: 14, borderRadius: 8, flex: 0.48, alignItems: 'center' },
-  confirmBtn: { backgroundColor: '#4A148C', padding: 14, borderRadius: 8, flex: 0.48, alignItems: 'center' },
+  // โซนสไตล์ Pop-up (Modal) ดีไซน์พิเศษ VIP
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 4, 32, 0.85)', justifyContent: 'center', padding: 20 },
+  luxuryPopupBox: { backgroundColor: '#FFF', padding: 24, borderRadius: 24, elevation: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 10, borderWidth: 1.5, borderColor: '#FFD700' },
+  luxuryPopupTitle: { fontSize: 21, fontWeight: 'bold', marginBottom: 22, textAlign: 'center', color: '#3A0F63', letterSpacing: 0.5 },
+  pinInput: { backgroundColor: '#F5F5FA', fontSize: 34, textAlign: 'center', padding: 14, borderRadius: 14, marginBottom: 24, letterSpacing: 15, color: '#3A0F63', borderWidth: 1.5, borderColor: '#D1C4E9', fontWeight: 'bold' },
+  modalActionRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
+  luxuryCancelBtn: { backgroundColor: '#757575', padding: 15, borderRadius: 12, flex: 0.47, alignItems: 'center', elevation: 3 },
+  luxuryConfirmBtn: { backgroundColor: '#3A0F63', padding: 15, borderRadius: 12, flex: 0.47, alignItems: 'center', elevation: 3, borderWidth: 1, borderColor: '#FFD700' },
   btnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
 
-  artistReadCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 12, elevation: 3, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#F0F0F0' },
-  artistReadName: { fontSize: 18, fontWeight: 'bold', color: '#2C3E50' },
+  artistReadCard: { backgroundColor: '#FFF', padding: 16, borderRadius: 16, marginBottom: 12, elevation: 3, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#EAEAEA' },
+  artistReadName: { fontSize: 18, fontWeight: 'bold', color: '#1A1A1A' },
   readDataRow: { flexDirection: 'row' },
-  readDataBox: { alignItems: 'center', marginLeft: 15 },
+  readDataBox: { alignItems: 'center', marginLeft: 16 },
   readDataLabel: { fontSize: 11, color: '#888', marginBottom: 3 },
-  readDataValue: { fontSize: 20, fontWeight: 'bold' }, 
+  readDataValue: { fontSize: 18, fontWeight: 'bold' }, 
 
-  infoBanner: { backgroundColor: '#E8EAF6', padding: 12, borderRadius: 8, marginBottom: 15, alignItems: 'center', borderWidth: 1, borderColor: '#C5CAE9' }, 
+  infoBanner: { backgroundColor: '#E8EAF6', padding: 14, borderRadius: 10, marginBottom: 16, alignItems: 'center', borderWidth: 1, borderColor: '#C5CAE9' }, 
   infoBannerText: { color: '#3F51B5', fontWeight: 'bold', fontSize: 14 },
-  addNameCompact: { flexDirection: 'row', marginBottom: 15 },
-  inputCompact: { flex: 1, backgroundColor: '#FFF', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: '#CCC', fontSize: 15 },
-  addBtnCompact: { backgroundColor: '#4CAF50', justifyContent: 'center', paddingHorizontal: 15, borderRadius: 8, marginLeft: 10, elevation: 2 },
+  addNameCompact: { flexDirection: 'row', marginBottom: 16 },
+  inputCompact: { flex: 1, backgroundColor: '#FFF', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#DDD', fontSize: 15, color: '#333' },
+  addBtnCompact: { backgroundColor: '#2E7D32', justifyContent: 'center', paddingHorizontal: 18, borderRadius: 10, marginLeft: 10, elevation: 3 },
   addBtnText: { color: '#FFF', fontWeight: 'bold', fontSize: 15 },
   
-  adminCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 15, elevation: 3, borderWidth: 1, borderColor: '#EEE' },
-  adminCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F0F0F0', paddingBottom: 12, marginBottom: 12 },
-  adminArtistName: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  adminSummaryText: { fontSize: 15, fontWeight: 'bold', color: '#4A148C' }, 
+  adminCard: { backgroundColor: '#FFF', padding: 16, borderRadius: 16, marginBottom: 16, elevation: 3, borderWidth: 1, borderColor: '#EBEBEB' },
+  adminCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F5F5F5', paddingBottom: 12, marginBottom: 14 },
+  adminArtistName: { fontSize: 18, fontWeight: 'bold', color: '#222' },
+  adminSummaryText: { fontSize: 15, fontWeight: 'bold', color: '#E91E63' }, 
   actionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  actionLabel: { fontSize: 14, color: '#555', width: 45, fontWeight: 'bold' },
+  actionLabel: { fontSize: 14, color: '#666', width: 45, fontWeight: 'bold' },
   
-  btnSmallMalai: { backgroundColor: '#E91E63', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 6, flex: 0.23, alignItems: 'center', elevation: 2 },
-  btnSmallCash: { backgroundColor: '#4CAF50', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 6, flex: 0.23, alignItems: 'center', elevation: 2 },
+  btnSmallMalai: { backgroundColor: '#E91E63', paddingVertical: 11, borderRadius: 8, flex: 0.23, alignItems: 'center', elevation: 2 },
+  btnSmallCash: { backgroundColor: '#2E7D32', paddingVertical: 11, borderRadius: 8, flex: 0.23, alignItems: 'center', elevation: 2 },
   btnSmallText: { color: '#FFF', fontWeight: 'bold', fontSize: 15 },
-  
-  miniLog: { backgroundColor: '#F5F5F5', padding: 8, borderRadius: 6, marginTop: 5, borderLeftWidth: 3, borderLeftColor: '#4A148C' },
-  miniLogText: { fontSize: 12, color: '#666' },
 
-  vipRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 15 },
-  vipBtn: { backgroundColor: '#F3E5F5', padding: 10, borderRadius: 6, borderWidth: 1, borderColor: '#CE93D8', width: '31%', marginBottom: 10, alignItems: 'center' },
-  vipBtnText: { color: '#4A148C', fontWeight: 'bold', fontSize: 12 },
-  modalInput: { backgroundColor: '#F9F9F9', padding: 15, borderRadius: 8, borderWidth: 1, borderColor: '#CCC', marginBottom: 25, fontSize: 16 },
+  vipRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 16 },
+  vipBtn: { backgroundColor: '#F3E5F5', paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#D1C4E9', width: '31%', marginBottom: 12, alignItems: 'center', elevation: 1 },
+  vipBtnText: { color: '#3A0F63', fontWeight: 'bold', fontSize: 13 },
+  modalInput: { backgroundColor: '#F5F5FA', padding: 14, borderRadius: 10, borderWidth: 1.5, borderColor: '#CCC', marginBottom: 24, fontSize: 16, color: '#333' },
 
-  leaderCard: { backgroundColor: '#4A148C', padding: 20, borderRadius: 12, marginBottom: 20, alignItems: 'center', elevation: 4 },
+  leaderCard: { backgroundColor: '#3A0F63', padding: 22, borderRadius: 16, marginBottom: 18, alignItems: 'center', elevation: 5, borderWidth: 1, borderColor: '#FFD700' },
   leaderTitle: { fontSize: 16, fontWeight: 'bold', color: '#FFD700' },
-  leaderMoney: { fontSize: 32, fontWeight: 'bold', color: '#FFF', marginVertical: 8 },
-  leaderSub: { fontSize: 13, color: '#E1BEE7' },
-  summaryCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 15, elevation: 3, borderLeftWidth: 5, borderLeftColor: '#4A148C' },
-  artistName: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  sumBox: { backgroundColor: '#F5F5F5', padding: 12, borderRadius: 8, marginVertical: 12, borderWidth: 1, borderColor: '#EEE' },
-  sumText: { fontSize: 13, color: '#555', marginBottom: 6 },
-  sumBonus: { fontSize: 14, color: '#E91E63', fontWeight: 'bold', marginTop: 4 }, 
-  finalPayText: { fontSize: 18, color: '#E91E63', fontWeight: 'bold', textAlign: 'right' },
+  leaderMoney: { fontSize: 34, fontWeight: 'bold', color: '#FFF', marginVertical: 8 },
+  leaderSub: { fontSize: 12, color: '#E1BEE7', textAlign: 'center' },
+  summaryCard: { backgroundColor: '#FFF', padding: 16, borderRadius: 16, marginBottom: 16, elevation: 3, borderLeftWidth: 6, borderLeftColor: '#3A0F63' },
+  artistName: { fontSize: 18, fontWeight: 'bold', color: '#1A1A1A' },
+  sumBox: { backgroundColor: '#F5F5FA', padding: 14, borderRadius: 12, marginVertical: 12, borderWidth: 1, borderColor: '#EAEAEA' },
+  sumText: { fontSize: 14, color: '#444', marginBottom: 6 },
+  sumBonus: { fontSize: 13, color: '#E91E63', fontWeight: 'bold', marginTop: 4 }, 
+  finalPayText: { fontSize: 16, color: '#E91E63', fontWeight: 'bold' },
   historyBox: { borderTopWidth: 1, borderTopColor: '#EEE', paddingTop: 12 },
-  historyTitle: { fontSize: 13, fontWeight: 'bold', color: '#4A148C' },
-  historyRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 10, borderRadius: 6, marginBottom: 6 },
-  historyPendingBg: { backgroundColor: '#FFF3E0', borderWidth: 1, borderColor: '#FFE0B2' },
-  historyText: { fontSize: 14, color: '#333', flex: 1, fontWeight: 'bold' },
+  historyTitle: { fontSize: 13, fontWeight: 'bold', color: '#3A0F63' },
+  historyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 12, borderRadius: 10, marginBottom: 8, backgroundColor: '#FFF3E0', borderWidth: 1, borderColor: '#FFE0B2' },
+  historyText: { fontSize: 14, color: '#333', flex: 1, fontWeight: '700' },
+  clickToPayBadge: { backgroundColor: '#3A0F63', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#FFD700' },
+  paidSuccessBanner: { backgroundColor: '#E8F5E9', padding: 12, borderRadius: 10, alignItems: 'center' },
 
-  menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-start', alignItems: 'flex-end' },
-  menuBoxFull: { width: '80%', maxWidth: 350, height: '100%', backgroundColor: '#FFF', padding: 25, paddingTop: 60, elevation: 15 },
-  menuTitle: { fontSize: 20, fontWeight: 'bold', color: '#4A148C' },
-  menuItem: { paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: '#EEE' },
-  menuItemText: { fontSize: 16, color: '#333' },
-  closeMenuBtn: { backgroundColor: '#F5F5F5', padding: 15, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#DDD', marginBottom: 20 },
-  closeMenuText: { color: '#555', fontSize: 16, fontWeight: 'bold' },
+  // สไตล์สไลด์เมนูด้านข้าง ระดับ VIP
+  menuOverlay: { flex: 1, backgroundColor: 'rgba(19, 5, 38, 0.7)', justifyContent: 'flex-start', alignItems: 'flex-end' },
+  menuBoxFull: { width: '82%', maxWidth: 340, height: '100%', backgroundColor: '#FFF', padding: 24, paddingTop: 60, elevation: 20 },
+  menuMainTitle: { fontSize: 22, fontWeight: 'bold', color: '#3A0F63', borderBottomWidth: 2, borderBottomColor: '#FFD700', paddingBottom: 12, marginBottom: 25 },
+  menuItem: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#EEE' },
+  menuItemText: { fontSize: 17, color: '#333', fontWeight: '500' },
+  menuResetBtn: { marginTop: 25, backgroundColor: '#FFF3E0', padding: 14, borderRadius: 12, borderWidth: 1.5, borderColor: '#FFB74D' },
+  menuResetBtnText: { color: '#E65100', fontWeight: 'bold', fontSize: 15 },
+  menuLogoutBtn: { marginTop: 20, backgroundColor: '#FFEBEE', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#FFCDD2' },
+  menuLogoutText: { color: '#D32F2F', fontWeight: 'bold', fontSize: 15, textAlign: 'center' },
+  closeMenuBtn: { backgroundColor: '#F5F5FA', padding: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#DDD', marginBottom: 20 },
+  closeMenuText: { color: '#555', fontSize: 15, fontWeight: 'bold' },
   
-  editProfileBtn: { marginTop: 6, backgroundColor: '#F5F5F5', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 15, borderWidth: 1, borderColor: '#DDD', alignSelf: 'flex-start' },
-  editProfileText: { fontSize: 12, color: '#555', fontWeight: 'bold' },
-  uploadBtn: { backgroundColor: '#F3E5F5', padding: 15, borderRadius: 10, marginBottom: 25, alignItems: 'center', borderWidth: 1, borderColor: '#CE93D8' },
-  uploadBtnText: { color: '#4A148C', fontWeight: 'bold', fontSize: 16 },
+  editProfileBtn: { marginTop: 6, backgroundColor: '#FFF', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1.5, borderColor: '#3A0F63', alignSelf: 'flex-start' },
+  editProfileText: { fontSize: 11, color: '#3A0F63', fontWeight: 'bold' },
+  luxuryAvatarPreview: { width: 120, height: 120, borderRadius: 60, alignSelf: 'center', marginBottom: 20, borderWidth: 3, borderColor: '#FFD700' },
+  luxuryAvatarPlaceholder: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#EEE', alignSelf: 'center', marginBottom: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#DDD' },
+  uploadBtn: { backgroundColor: '#F3E5F5', padding: 14, borderRadius: 12, marginBottom: 24, alignItems: 'center', borderWidth: 1.5, borderColor: '#D1C4E9' },
+  uploadBtnText: { color: '#4A148C', fontWeight: 'bold', fontSize: 15 },
 
-  dashboardCard: { backgroundColor: '#FFF', padding: 20, borderRadius: 12, marginBottom: 15, elevation: 3, borderWidth: 1, borderColor: '#EEE' },
-  dashTitle: { fontSize: 18, fontWeight: 'bold', color: '#4A148C', marginBottom: 15 },
-  dashText: { fontSize: 16, color: '#333', marginBottom: 8 },
-  dashLine: { height: 1, backgroundColor: '#EEE', marginVertical: 12 },
-  dashHighlight: { fontSize: 18, fontWeight: 'bold', color: '#E91E63' }
+  // สไตล์หน้าแดชบอร์ดการเงินวงตัวใหม่
+  dashboardCard: { backgroundColor: '#FFF', padding: 20, borderRadius: 20, marginBottom: 16, elevation: 4, borderWidth: 1, borderColor: '#EBEBEB' },
+  dashTitle: { fontSize: 17, fontWeight: 'bold', color: '#3A0F63', marginBottom: 16 },
+  dashDetailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, alignItems: 'center' },
+  dashText: { fontSize: 15, color: '#555' },
+  dashValue: { fontSize: 16, fontWeight: 'bold', color: '#1A1A1A' },
+  dashLine: { height: 1.5, backgroundColor: '#F0F0F5', marginVertical: 14 },
+  dashHighlight: { fontSize: 17, fontWeight: 'bold', color: '#E91E63', textAlign: 'center' },
+  resetModalWarningText: { fontSize: 15, color: '#555', textAlign: 'center', lineHeight: 22, marginBottom: 24 }
 });
