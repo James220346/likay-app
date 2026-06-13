@@ -8,11 +8,17 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
         
-        {/* 🚀 ดึงรูป icon.png จากโฟลเดอร์ public */}
+        {/* 🚀 1. ดึงรูปไอคอนพระเอกลิเกจากโฟลเดอร์ public (เรียกตรงๆ หน้าบ้าน) */}
         <link rel="apple-touch-icon" href="/icon.png?v=999" />
         <link rel="icon" type="image/png" href="/icon.png?v=999" />
         
+        {/* 🚀 2. เรียกใช้งานไฟล์บัตรประชาชนแอป (Manifest) เพื่อสั่งให้แอปเต็มจอ ไร้แถบ Google */}
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#1A1A2E" />
+        
+        {/* 🚀 3. คำสั่งเปิดระบบ Standalone สำหรับทั้งระบบ iOS และ Android */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="บัญชีลิเก" />
 
