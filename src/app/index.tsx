@@ -175,12 +175,10 @@ export default function App() {
             const canvas = document.createElement('canvas');
             canvas.width = 150; canvas.height = 150;
             const ctx = canvas.getContext('2d');
-            
             const size = Math.min(img.width, img.height);
             const startX = (img.width - size) / 2;
             const startY = (img.height - size) / 2;
             ctx.drawImage(img, startX, startY, size, size, 0, 0, 150, 150);
-            
             setEditAvatarUrl(canvas.toDataURL('image/jpeg', 0.5));
           };
           img.src = asset.uri;
@@ -238,7 +236,6 @@ export default function App() {
   const renderLoginScreen = () => (
     <View style={styles.loginContainer}>
       <View style={styles.logoRing}>
-        {/* 🚀 ย้ายกลับไปดึงรูปลิเกจริงของคุณสนธยา (likay_logo.png) เพื่อโชว์ตรงกลางหน้าแรก */}
         <Image source={require('../../assets/images/likay_logo.png')} style={styles.appLogoImage} />
       </View>
       <Text style={styles.appName}>ระบบบัญชีคณะลิเก</Text>
@@ -311,7 +308,8 @@ export default function App() {
 
       const datesWithUnpaid = new Set(historyArray.filter(h => !h.isPaid).map(h => h.date));
       datesWithUnpaid.forEach(date => {
-         if (dailyMalaiTotals[date] >= 10) totalPendingPay += 100;
+         // 🛠️ แก้ไข: ไม่นำหัวหน้าคณะมาคิดเงินโบนัส 100 บาท ในหน้า Dashboard ด้วย
+         if (artist.name !== LEADER_NAME && dailyMalaiTotals[date] >= 10) totalPendingPay += 100;
       });
     });
 
@@ -326,7 +324,7 @@ export default function App() {
             <View style={styles.dashDetailRow}><Text style={styles.dashText}>💰 รางวัลเงินสดรวม:</Text><Text style={styles.dashValue}>{todayCash.toLocaleString()} บาท</Text></View>
             <View style={styles.dashLine} />
             <Text style={styles.dashHighlight}>👑 ส่วนแบ่งเข้าวงการคลัง: {todayLeaderShare.toLocaleString()} บ.</Text>
-            <Text style={{fontSize: 11, color: '#AAA', fontStyle: 'italic', marginTop: 5}}>*หักแบ่ง 50% เฉพาะตอนศิลปินได้มาลัย 10 พวงขึ้นไป/วัน เท่านั้น</Text>
+            <Text style={{fontSize: 11, color: '#AAA', fontStyle: 'italic', marginTop: 5}}>*หักแบ่ง 50% เฉพาะตอนลูกน้องได้มาลัย 10 พวงขึ้นไป/วัน เท่านั้น</Text>
           </View>
           <View style={[styles.dashboardCard, {backgroundColor: '#FFF8F0', borderColor: '#FF9800', borderWidth: 1.5}]}>
             <Text style={[styles.dashTitle, {color: '#E65100'}]}>⏳ ยอดค้างโอนศิลปินรวมทั้งหมด</Text>
@@ -478,7 +476,10 @@ export default function App() {
 
           const pendingMalaiPay = unpaidMalai * rate;
           const pendingCashPay = unpaidCash;
-          const pendingBonus = (malai >= 10 && unpaidHistory.length > 0) ? 100 : 0;
+          
+          // 🛠️ แก้ไข: ตรวจสอบไม่ให้บวกโบนัสถ้าเป็นชื่อหัวหน้าคณะ
+          const pendingBonus = (artist.name !== LEADER_NAME && malai >= 10 && unpaidHistory.length > 0) ? 100 : 0;
+          
           const finalPay = pendingMalaiPay + pendingCashPay + pendingBonus;
 
           return (
@@ -499,7 +500,9 @@ export default function App() {
                   </Text>
                 )}
                 <Text style={styles.sumText}>💰 รางวัลเงินสดสะสม: <Text style={{fontWeight:'bold', color:'#4A148C'}}>{cash.toLocaleString()}</Text> บาท</Text>
-                {malai >= 10 && <Text style={styles.sumBonus}>🎉 โบนัสมาลัยแตกประจำวัน: +100 บาท</Text>}
+                
+                {/* 🛠️ แก้ไข: แสดงข้อความโบนัสเฉพาะลูกน้องเท่านั้น */}
+                {artist.name !== LEADER_NAME && malai >= 10 && <Text style={styles.sumBonus}>🎉 โบนัสมาลัยแตกประจำวัน: +100 บาท</Text>}
               </View>
               
               <View style={styles.historyBox}>
