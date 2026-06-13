@@ -685,4 +685,4 @@ const styles = StyleSheet.create({
   dashText: { fontSize: 16, color: '#333', marginBottom: 8 },
   dashLine: { height: 1, backgroundColor: '#EEE', marginVertical: 12 },
   dashHighlight: { fontSize: 18, fontWeight: 'bold', color: '#E91E63' }
-});
+}); 
