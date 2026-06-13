@@ -2,16 +2,13 @@ import { createClient } from '@supabase/supabase-js';
 import * as ImagePicker from 'expo-image-picker';
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Dimensions, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-// 🔑 เชื่อมต่อ Supabase 
+// 🔑 เชื่อมต่อ Supabase
 const supabaseUrl = 'https://aaqxswdaxdcstbdrncyf.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhcXhzd2RheGRjc3RiZHJuY3lmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNTY1MTQsImV4cCI6MjA5NjgzMjUxNH0.F_kBgTkozdklsQT524tmGu4qjjcPmxi-wlni7LCVUaM';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const { width } = Dimensions.get('window');
-
-// รายชื่อตั้งต้น
 const initialArtistsList = ['สนธยา', 'โก๊ะ', 'ต่อ', 'พ่อดอกไม้', 'เจมส์', 'น้องพีพี', 'เอม', 'กิ๊ก', 'นัท', 'ซูซู'];
 const defaultArtists = initialArtistsList.map((name, index) => ({
   id: 'artist_' + index, name: name, malai: 0, cash: 0, history: [], avatar: ''
@@ -21,48 +18,49 @@ export default function App() {
   const LEADER_NAME = "สนธยา";
   const ADMIN_PIN = "1410"; 
 
+  const [artists, setArtists] = useState(defaultArtists);
   const [role, setRole] = useState(null); 
   const [currentScreen, setCurrentScreen] = useState('login'); 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [showPinModal, setShowPinModal] = useState(false);
-
-  const [artists, setArtists] = useState(defaultArtists);
   const [newArtistName, setNewArtistName] = useState('');
-
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [transaction, setTransaction] = useState(null);
   const [customGiverName, setCustomGiverName] = useState('');
   const vipNames = ['ไม่ระบุชื่อ', 'พี่สร', 'พี่สาวใจดี', 'พี่นางฟ้า', 'แม่รอย'];
-
   const [editingArtist, setEditingArtist] = useState(null);
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
-
   const [currentDateObj, setCurrentDateObj] = useState(new Date());
-  
+
   const getThaiDateStr = (dateObj) => dateObj.toLocaleDateString('th-TH');
   const viewDateStr = getThaiDateStr(currentDateObj);
   const todayStr = getThaiDateStr(new Date()); 
 
-  // ☁️ โหลดข้อมูลจาก Supabase 
+  // 🛡️ เกราะป้องกันจอขาว: บังคับให้ artists เป็น Array เสมอ
+  const validArtists = Array.isArray(artists) ? artists : defaultArtists;
+
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
-    const { data, error } = await supabase.from('likay_state').select('data').eq('id', 1).single();
-    if (data && data.data && data.data.length > 0) {
-      setArtists(data.data);
+    try {
+      const { data, error } = await supabase.from('likay_state').select('data').eq('id', 1).single();
+      if (data && data.data && Array.isArray(data.data)) {
+        setArtists(data.data);
+      }
+    } catch (e) {
+      console.log("Fetch Error:", e);
     }
   };
 
-  // ☁️ เซฟข้อมูลลง Supabase (อัปเกรดเป็น upsert ป้องกันฐานข้อมูลว่างเปล่า)
   const saveDataToCloud = async (newData) => {
     setArtists(newData);
-    // ใช้ upsert: ถ้าไม่มีข้อมูลให้สร้างใหม่ ถ้ามีแล้วให้อัปเดต
-    const { error } = await supabase.from('likay_state').upsert({ id: 1, data: newData });
-    if (error) {
-      alert("⚠️ บันทึกข้อมูลไม่สำเร็จ: " + error.message);
+    try {
+      await supabase.from('likay_state').upsert({ id: 1, data: newData });
+    } catch (e) {
+      alert("⚠️ เชื่อมต่อระบบคลาวด์มีปัญหาครับ");
     }
   };
 
@@ -72,20 +70,32 @@ export default function App() {
     setCurrentDateObj(newDate);
   };
 
+  // 🛡️ คำนวณยอดเงิน (ปลอดภัย 100%)
   const getTotalsByDate = (artist, targetDateStr) => {
+    if (!artist) return { malai: 0, cash: 0, dayHistory: [] };
     let malai = 0; let cash = 0;
-    // โค้ดตรงนี้สำคัญมาก ต้องมี || [] เพื่อกันจอขาว
-    const dayHistory = artist.history.filter(h => h.date === targetDateStr);
+    const historyArray = Array.isArray(artist.history) ? artist.history : [];
+    const dayHistory = historyArray.filter(h => h.date === targetDateStr);
+    
     dayHistory.forEach(item => {
-      if (item.type === 'malai') malai += item.amount;
-      if (item.type === 'cash') cash += item.amount;
+      if (item.type === 'malai') malai += (item.amount || 0);
+      if (item.type === 'cash') cash += (item.amount || 0);
     });
     return { malai, cash, dayHistory };
   };
 
+  const getLeaderTotalByDate = () => {
+    let total = 0;
+    validArtists.forEach(artist => {
+      const { malai } = getTotalsByDate(artist, viewDateStr);
+      total += (malai * 20) / 2;
+    });
+    return total;
+  };
+
   const handleAdminLogin = () => {
     if (pinInput === ADMIN_PIN) {
-      setRole('admin'); setCurrentScreen('addTip'); setShowPinModal(false); setPinInput('');
+      setRole('admin'); setCurrentScreen('dashboard'); setShowPinModal(false); setPinInput('');
     } else {
       alert('รหัสผ่านไม่ถูกต้อง!');
     }
@@ -101,7 +111,7 @@ export default function App() {
 
   const addNewArtist = () => {
     if (newArtistName.trim() !== '') {
-      const updatedArtists = [...artists, { id: Date.now().toString(), name: newArtistName, history: [], avatar: '' }];
+      const updatedArtists = [...validArtists, { id: Date.now().toString(), name: newArtistName, history: [], avatar: '' }];
       saveDataToCloud(updatedArtists);
       setNewArtistName('');
     }
@@ -115,11 +125,12 @@ export default function App() {
     const finalName = giverName || customGiverName || 'ไม่ระบุชื่อ';
     const { id, amount, type } = transaction;
 
-    const updatedArtists = artists.map(artist => {
+    const updatedArtists = validArtists.map(artist => {
       if (artist.id === id) {
         let logMsg = type === 'malai' ? `🌸 ${finalName} ให้ ${amount} พวง` : `💰 ${finalName} ให้ ${amount} บ.`;
+        const historyArray = Array.isArray(artist.history) ? artist.history : [];
         const newHistoryItem = { id: Date.now().toString(), type, amount, text: logMsg, isPaid: false, date: todayStr };
-        return { ...artist, history: [newHistoryItem, ...artist.history] };
+        return { ...artist, history: [newHistoryItem, ...historyArray] };
       }
       return artist;
     });
@@ -128,16 +139,16 @@ export default function App() {
   };
 
   const togglePaymentStatus = (artistId, historyId) => {
-    const updatedArtists = artists.map(artist => {
+    const updatedArtists = validArtists.map(artist => {
       if (artist.id === artistId) {
-        return { ...artist, history: artist.history.map(item => item.id === historyId ? { ...item, isPaid: !item.isPaid } : item) };
+        const historyArray = Array.isArray(artist.history) ? artist.history : [];
+        return { ...artist, history: historyArray.map(item => item.id === historyId ? { ...item, isPaid: !item.isPaid } : item) };
       }
       return artist;
     });
     saveDataToCloud(updatedArtists);
   };
 
-  // 🖼️ เลือกรูปจากเครื่อง (ฉบับแปลงไฟล์เป็นข้อมูลถาวร 100%)
   const pickImage = async () => {
     try {
       let result = await ImagePicker.launchImageLibraryAsync({
@@ -145,76 +156,45 @@ export default function App() {
         allowsEditing: true,
         aspect: [1, 1], 
         quality: 0.1,   
+        base64: true,
       });
 
       if (!result.canceled) {
         const asset = result.assets[0];
-
         if (Platform.OS === 'web') {
-          // โหลดภาพมาตรวจสอบน้ำหนักไฟล์
-          const response = await fetch(asset.uri);
-          const blob = await response.blob();
-          
-          // 🛑 ถ้ารูปใหญ่เกิน 1MB ให้บล็อกทันที! (ฐานข้อมูลฟรีรับได้จำกัด)
-          if (blob.size > 1000000) {
-              alert("❌ รูปนี้ไฟล์ใหญ่เกินไปครับ (" + (blob.size/1000000).toFixed(1) + " MB)\n\n💡 วิธีแก้: ให้ไปเปิดรูปนี้ในมือถือ -> 'แคปหน้าจอ' -> แล้วเอารูปที่แคปมาอัปโหลดแทนครับ (ไฟล์แคปจะเล็กมากเซฟผ่านแน่นอน)");
-              return;
-          }
-
-          // แปลงรูปเป็นรหัสข้อความสำหรับเซฟลงฐานข้อมูล
-          const reader = new FileReader();
-          reader.readAsDataURL(blob);
-          reader.onloadend = () => {
-            setEditAvatarUrl(reader.result);
+          const img = document.createElement('img');
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 150; canvas.height = 150;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, 150, 150);
+            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.5);
+            setEditAvatarUrl(compressedBase64);
           };
+          img.src = asset.uri;
         } else {
           setEditAvatarUrl(`data:image/jpeg;base64,${asset.base64}`);
         }
       }
     } catch (e) {
-      alert("เกิดข้อผิดพลาด: " + e.message);
+      alert("เกิดข้อผิดพลาดในการดึงรูป");
     }
   };
-    // บันทึกรูปลงฐานข้อมูล
+
   const saveProfileEdit = async () => {
-    try {
-      const updatedArtists = artists.map(artist => 
-        artist.id === editingArtist.id ? { ...artist, avatar: editAvatarUrl } : artist
-      );
-      
-      setArtists(updatedArtists); 
-      
-      // ใช้ upsert บังคับเซฟ
-      const { error } = await supabase.from('likay_state').upsert({ id: 1, data: updatedArtists });
-      
-      if (error) {
-         alert("❌ ระบบปฏิเสธการเซฟ: " + error.message);
-      } else {
-         alert("✅ บันทึกรูปสำเร็จ 100%!");
-         setEditingArtist(null); 
-      }
-    } catch (err) {
-      alert("เกิดข้อผิดพลาด: " + err.message);
-    }
+    const updatedArtists = validArtists.map(artist => 
+      artist.id === editingArtist.id ? { ...artist, avatar: editAvatarUrl } : artist
+    );
+    await saveDataToCloud(updatedArtists);
+    alert("✅ บันทึกรูปสำเร็จ!");
+    setEditingArtist(null); 
   };
 
   // --- UI Components ---
   const renderHeader = (title) => (
     <View style={[styles.header, { position: 'relative', zIndex: 9999 }]}>
       {role && (
-        <TouchableOpacity 
-          onPress={() => setIsMenuOpen(true)} 
-          style={{ 
-            position: 'absolute', 
-            left: 10, 
-            bottom: 12, 
-            width: 50, 
-            height: 50, 
-            justifyContent: 'center', 
-            alignItems: 'center',
-            zIndex: 10000 
-          }}
-        >
+        <TouchableOpacity onPress={() => setIsMenuOpen(true)} style={styles.hamburgerBtn}>
           <Text style={styles.hamburgerIcon}>☰</Text>
         </TouchableOpacity>
       )}
@@ -245,7 +225,7 @@ export default function App() {
     </View>
   );
 
-  // --- 📱 หน้าจอ 0: เลือกสถานะ (Login) ---
+  // --- 📱 หน้าจอ 0: Login ---
   const renderLoginScreen = () => (
     <View style={styles.loginContainer}>
       <View style={styles.logoRing}>
@@ -279,13 +259,76 @@ export default function App() {
     </View>
   );
 
-  // --- 📱 หน้าจอ 1: เช็กยอดสำหรับศิลปิน ---
+  // --- 📱 หน้าจอ 1: Dashboard (หัวหน้าคณะ) ---
+  const renderDashboardScreen = () => {
+    let todayMalai = 0, todayCash = 0, todayLeaderShare = 0;
+    let allTimeMalai = 0, allTimeCash = 0, allTimeLeaderShare = 0;
+    let totalPendingPay = 0;
+
+    validArtists.forEach(artist => {
+      const historyArray = Array.isArray(artist.history) ? artist.history : [];
+      historyArray.forEach(item => {
+        const isToday = item.date === viewDateStr;
+        if (item.type === 'malai') {
+          allTimeMalai += item.amount;
+          if (isToday) todayMalai += item.amount;
+        }
+        if (item.type === 'cash') {
+          allTimeCash += item.amount;
+          if (isToday) todayCash += item.amount;
+        }
+        // คำนวณยอดค้างจ่าย
+        if (!item.isPaid) {
+          if (item.type === 'cash') totalPendingPay += item.amount;
+          if (item.type === 'malai') totalPendingPay += (item.amount * 20) / 2;
+        }
+      });
+    });
+
+    todayLeaderShare = (todayMalai * 20) / 2;
+    allTimeLeaderShare = (allTimeMalai * 20) / 2;
+
+    return (
+      <View style={{ flex: 1, backgroundColor: '#F4F6F9' }}>
+        {renderHeader('📊 แดชบอร์ดการเงิน')}
+        {renderDateSelector()}
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          
+          <View style={styles.dashboardCard}>
+            <Text style={styles.dashTitle}>📍 สรุปยอดวันนี้ ({viewDateStr})</Text>
+            <Text style={styles.dashText}>🌸 มาลัยรวม: {todayMalai} พวง ({(todayMalai * 20).toLocaleString()} บ.)</Text>
+            <Text style={styles.dashText}>💰 เงินสดรวม: {todayCash.toLocaleString()} บ.</Text>
+            <View style={styles.dashLine} />
+            <Text style={styles.dashHighlight}>👑 ส่วนแบ่งหัวหน้า: {todayLeaderShare.toLocaleString()} บ.</Text>
+          </View>
+
+          <View style={[styles.dashboardCard, {backgroundColor: '#4A148C'}]}>
+            <Text style={[styles.dashTitle, {color: '#FFD700'}]}>📈 สรุปยอดรวมทั้งหมด (All Time)</Text>
+            <Text style={[styles.dashText, {color: '#FFF'}]}>🌸 มาลัยรวม: {allTimeMalai} พวง ({(allTimeMalai * 20).toLocaleString()} บ.)</Text>
+            <Text style={[styles.dashText, {color: '#FFF'}]}>💰 เงินสดรวม: {allTimeCash.toLocaleString()} บ.</Text>
+            <View style={[styles.dashLine, {backgroundColor: '#7B1FA2'}]} />
+            <Text style={[styles.dashHighlight, {color: '#FFD700'}]}>👑 ส่วนแบ่งสะสม: {allTimeLeaderShare.toLocaleString()} บ.</Text>
+          </View>
+
+          <View style={[styles.dashboardCard, {backgroundColor: '#FFF3E0', borderColor: '#FF9800', borderWidth: 1}]}>
+            <Text style={[styles.dashTitle, {color: '#E65100'}]}>⏳ ยอดค้างโอนศิลปินทั้งหมด</Text>
+            <Text style={{fontSize: 32, fontWeight: 'bold', color: '#E65100', marginVertical: 10, textAlign: 'center'}}>{totalPendingPay.toLocaleString()} บาท</Text>
+            <Text style={{fontSize: 12, color: '#795548', textAlign: 'center'}}>*ไปที่เมนู 'สรุปบัญชี' เพื่อติ๊กจ่ายเงินให้ศิลปิน</Text>
+          </View>
+
+          <View style={{height: 40}} />
+        </ScrollView>
+      </View>
+    );
+  };
+
+  // --- 📱 หน้าจอ 2: เช็กยอดสำหรับศิลปิน ---
   const renderArtistScreen = () => (
     <View style={{ flex: 1, backgroundColor: '#F4F6F9' }}>
       {renderHeader('บอร์ดสรุปยอดศิลปิน')}
       {renderDateSelector()}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {artists.map(artist => {
+        {validArtists.map(artist => {
           const { malai, cash } = getTotalsByDate(artist, viewDateStr);
           return (
             <View key={artist.id} style={styles.artistReadCard}>
@@ -316,7 +359,7 @@ export default function App() {
     </View>
   );
 
-  // --- 📱 หน้าจอ 2: บันทึกรายได้ (Admin) ---
+  // --- 📱 หน้าจอ 3: บันทึกรายได้ (Admin) ---
   const renderAddTipScreen = () => (
     <View style={{ flex: 1, backgroundColor: '#F4F6F9' }}>
       {renderHeader('หน้าเวที: บันทึกยอด')}
@@ -332,7 +375,7 @@ export default function App() {
           </TouchableOpacity>
         </View>
 
-        {artists.map(artist => {
+        {validArtists.map(artist => {
           const { malai, cash, dayHistory } = getTotalsByDate(artist, todayStr);
           return (
             <View key={artist.id} style={styles.adminCard}>
@@ -401,7 +444,7 @@ export default function App() {
     </View>
   );
 
-  // --- 📱 หน้าจอ 3: สรุปบัญชี (Admin) ---
+  // --- 📱 หน้าจอ 4: สรุปบัญชี (Admin) ---
   const renderSummaryScreen = () => (
     <View style={{ flex: 1, backgroundColor: '#F4F6F9' }}>
       {renderHeader('บัญชีหลังบ้าน')}
@@ -409,11 +452,11 @@ export default function App() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.leaderCard}>
           <Text style={styles.leaderTitle}>👑 ส่วนแบ่งหัวหน้า ประจำวันที่ {viewDateStr}</Text>
-          <Text style={styles.leaderMoney}>{getLeaderTotalByDate()} บาท</Text>
+          <Text style={styles.leaderMoney}>{getLeaderTotalByDate().toLocaleString()} บาท</Text>
           <Text style={styles.leaderSub}>(หักจากยอดมาลัย 50% ของวันนี้)</Text>
         </View>
 
-        {artists.map(artist => {
+        {validArtists.map(artist => {
           const { malai, cash, dayHistory } = getTotalsByDate(artist, viewDateStr);
           if (malai === 0 && cash === 0 && dayHistory.length === 0) return null;
 
@@ -435,7 +478,7 @@ export default function App() {
                 {bonus > 0 && <Text style={styles.sumBonus}>🎉 โบนัสมาลัย: +{bonus} บ.</Text>}
               </View>
               
-              <Text style={styles.finalPayText}>ยอดโอนสุทธิ: {finalPay} บาท</Text>
+              <Text style={styles.finalPayText}>ยอดโอนสุทธิ: {finalPay.toLocaleString()} บาท</Text>
 
               <View style={styles.historyBox}>
                 <Text style={styles.historyTitle}>รายการของวันนี้ (กดเพื่อติ๊กจ่ายแล้ว)</Text>
@@ -460,6 +503,7 @@ export default function App() {
     <SafeAreaView style={{ flex: 1, backgroundColor: '#FAFAFA' }}>
       <Stack.Screen options={{ headerShown: false }} />
       {currentScreen === 'login' && renderLoginScreen()}
+      {currentScreen === 'dashboard' && renderDashboardScreen()}
       {currentScreen === 'artistView' && renderArtistScreen()}
       {currentScreen === 'addTip' && renderAddTipScreen()}
       {currentScreen === 'summary' && renderSummaryScreen()}
@@ -497,6 +541,9 @@ export default function App() {
             <Text style={[styles.menuTitle, {fontSize: 24, marginBottom: 40}]}>เมนูระบบ 🎭</Text>
             {role === 'admin' && (
               <>
+                <TouchableOpacity style={styles.menuItem} onPress={() => { setCurrentScreen('dashboard'); setIsMenuOpen(false); }}>
+                  <Text style={styles.menuItemText}>📊 แดชบอร์ดการเงิน</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.menuItem} onPress={() => { setCurrentScreen('addTip'); setIsMenuOpen(false); }}>
                   <Text style={styles.menuItemText}>📝 ไปหน้าเวที (บันทึกยอด)</Text>
                 </TouchableOpacity>
@@ -525,10 +572,10 @@ export default function App() {
   );
 }
 
-// --- ตกแต่งความสวยงาม UI (High-Contrast Elegant Theme) ---
+// --- ตกแต่งความสวยงาม UI ---
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#4A148C', padding: 15, paddingTop: Platform.OS === 'ios' ? 45 : 15, elevation: 5 }, 
-  hamburgerBtn: { padding: 5 },
+  hamburgerBtn: { position: 'absolute', left: 10, bottom: 8, width: 50, height: 50, justifyContent: 'center', alignItems: 'center', zIndex: 10000 },
   hamburgerIcon: { fontSize: 28, color: '#FFD700' },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#FFF', letterSpacing: 1 },
   content: { padding: 12 },
@@ -629,7 +676,13 @@ const styles = StyleSheet.create({
   
   editProfileBtn: { marginTop: 6, backgroundColor: '#F5F5F5', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 15, borderWidth: 1, borderColor: '#DDD', alignSelf: 'flex-start' },
   editProfileText: { fontSize: 12, color: '#555', fontWeight: 'bold' },
-  
   uploadBtn: { backgroundColor: '#F3E5F5', padding: 15, borderRadius: 10, marginBottom: 25, alignItems: 'center', borderWidth: 1, borderColor: '#CE93D8' },
-  uploadBtnText: { color: '#4A148C', fontWeight: 'bold', fontSize: 16 }
+  uploadBtnText: { color: '#4A148C', fontWeight: 'bold', fontSize: 16 },
+
+  // สไตล์สำหรับหน้า Dashboard 
+  dashboardCard: { backgroundColor: '#FFF', padding: 20, borderRadius: 12, marginBottom: 15, elevation: 3, borderWidth: 1, borderColor: '#EEE' },
+  dashTitle: { fontSize: 18, fontWeight: 'bold', color: '#4A148C', marginBottom: 15 },
+  dashText: { fontSize: 16, color: '#333', marginBottom: 8 },
+  dashLine: { height: 1, backgroundColor: '#EEE', marginVertical: 12 },
+  dashHighlight: { fontSize: 18, fontWeight: 'bold', color: '#E91E63' }
 });
