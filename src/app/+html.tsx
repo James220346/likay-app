@@ -8,11 +8,10 @@ export default function Root({ children }: { children: React.ReactNode }) {
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
         
-        {/* 🚀 คำสั่งประกาศิต: บังคับให้มือถือทุกค่ายดึงรูปนี้ไปทำเป็นไอคอนแอป */}
-        <link rel="apple-touch-icon" href="/likay_logo.png" />
-        <link rel="icon" type="image/png" href="/likay_logo.png" />
+        {/* 🚀 ชี้ไปที่รูปการ์ตูนจัตุรัสของเรา */}
+        <link rel="apple-touch-icon" href="/assets/images/logo-square.png" />
+        <link rel="icon" type="image/png" href="/assets/images/logo-square.png" />
         
-        {/* ตั้งค่าให้หน้าแอปดูเป็นแอปมือถือจริงๆ (ซ่อนแถบเบราว์เซอร์) */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="บัญชีลิเก" />
