@@ -28,7 +28,7 @@
         {
           "backgroundColor": "#1A1A2E",
           "android": {
-            "image": "./assets/images/likay_logo.png",
+            "image": "./assets/images/logo-square.png",
             "imageWidth": 200
           }
         }
