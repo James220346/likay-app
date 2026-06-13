@@ -176,7 +176,6 @@ export default function App() {
             canvas.width = 150; canvas.height = 150;
             const ctx = canvas.getContext('2d');
             
-            // 🛠️ ตรรกะใหม่: คำนวณตัดขอบรูปภาพจากตรงกลางให้เป็นจัตุรัสก่อนย่อขนาด (กันรูปเบี้ยว)
             const size = Math.min(img.width, img.height);
             const startX = (img.width - size) / 2;
             const startY = (img.height - size) / 2;
@@ -239,7 +238,8 @@ export default function App() {
   const renderLoginScreen = () => (
     <View style={styles.loginContainer}>
       <View style={styles.logoRing}>
-        <Image source={require('../../assets/images/logo-square.png')} style={styles.appLogoImage} />
+        {/* 🚀 ย้ายกลับไปดึงรูปลิเกจริงของคุณสนธยา (likay_logo.png) เพื่อโชว์ตรงกลางหน้าแรก */}
+        <Image source={require('../../assets/images/likay_logo.png')} style={styles.appLogoImage} />
       </View>
       <Text style={styles.appName}>ระบบบัญชีคณะลิเก</Text>
       <Text style={styles.appSubName}>✨ บริหารงานโดย {LEADER_NAME} ✨</Text>
@@ -575,14 +575,12 @@ export default function App() {
         </View>
       </Modal>
 
-      {/* 🛠️ แก้ไขระบบเมนูให้กดพื้นที่ว่างแล้วปิดได้ */}
       <Modal visible={isMenuOpen} transparent={true} animationType="fade">
         <TouchableOpacity 
           style={styles.menuOverlay} 
           activeOpacity={1} 
           onPressOut={() => setIsMenuOpen(false)}
         >
-          {/* ป้องกันไม่ให้การกดที่ตัวเมนูไปสั่งให้เมนูปิด */}
           <View style={styles.menuBoxFull} onStartShouldSetResponder={() => true}>
             <Text style={styles.menuMainTitle}>แผงควบคุมระบบ 🎭</Text>
             {role === 'admin' && (
