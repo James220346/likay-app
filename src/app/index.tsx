@@ -2,12 +2,14 @@ import { createClient } from '@supabase/supabase-js';
 import * as ImagePicker from 'expo-image-picker';
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, Image, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 // 🔑 เชื่อมต่อ Supabase
 const supabaseUrl = 'https://aaqxswdaxdcstbdrncyf.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhcXhzd2RheGRjc3RiZHJuY3lmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNTY1MTQsImV4cCI6MjA5NjgzMjUxNH0.F_kBgTkozdklsQT524tmGu4qjjcPmxi-wlni7LCVUaM';
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+const { width } = Dimensions.get('window');
 
 const initialArtistsList = ['สนธยา', 'โก๊ะ', 'ต่อ', 'พ่อดอกไม้', 'เจมส์', 'น้องพีพี', 'เอม', 'กิ๊ก', 'นัท', 'ซูซู'];
 const defaultArtists = initialArtistsList.map((name, index) => ({
@@ -37,7 +39,6 @@ export default function App() {
   const viewDateStr = getThaiDateStr(currentDateObj);
   const todayStr = getThaiDateStr(new Date()); 
 
-  // 🛡️ เกราะป้องกันจอขาว: บังคับให้ artists เป็น Array เสมอ
   const validArtists = Array.isArray(artists) ? artists : defaultArtists;
 
   useEffect(() => {
@@ -46,7 +47,7 @@ export default function App() {
 
   const fetchData = async () => {
     try {
-      const { data, error } = await supabase.from('likay_state').select('data').eq('id', 1).single();
+      const { data } = await supabase.from('likay_state').select('data').eq('id', 1).single();
       if (data && data.data && Array.isArray(data.data)) {
         setArtists(data.data);
       }
@@ -70,7 +71,6 @@ export default function App() {
     setCurrentDateObj(newDate);
   };
 
-  // 🛡️ คำนวณยอดเงิน (ปลอดภัย 100%)
   const getTotalsByDate = (artist, targetDateStr) => {
     if (!artist) return { malai: 0, cash: 0, dayHistory: [] };
     let malai = 0; let cash = 0;
@@ -84,11 +84,14 @@ export default function App() {
     return { malai, cash, dayHistory };
   };
 
+  // 🛡️ กฎแบ่งเงินหัวหน้า: ได้ส่วนแบ่ง 50% เฉพาะตอนที่ยอดมาลัยศิลปิน >= 10 พวง
   const getLeaderTotalByDate = () => {
     let total = 0;
     validArtists.forEach(artist => {
       const { malai } = getTotalsByDate(artist, viewDateStr);
-      total += (malai * 20) / 2;
+      if (artist.name !== LEADER_NAME && malai >= 10) {
+          total += (malai * 10); // หักเข้ากองกลาง 10 บาท/พวง
+      }
     });
     return total;
   };
@@ -149,14 +152,29 @@ export default function App() {
     saveDataToCloud(updatedArtists);
   };
 
+  const resetTestData = () => {
+    Alert.alert(
+      "⚠️ ยืนยันการล้างข้อมูล",
+      "คุณต้องการลบยอดเงินและรายการทั้งหมดกลับไปเริ่มต้นใหม่ใช่หรือไม่?",
+      [
+        { text: "ยกเลิก", style: "cancel" },
+        { 
+          text: "ล้างข้อมูล", style: "destructive", 
+          onPress: () => {
+            saveDataToCloud(defaultArtists);
+            alert("✅ ล้างข้อมูลเรียบร้อย เริ่มต้นใหม่ได้เลยครับ!");
+            setIsMenuOpen(false);
+          }
+        }
+      ]
+    );
+  };
+
   const pickImage = async () => {
     try {
       let result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1], 
-        quality: 0.1,   
-        base64: true,
+        allowsEditing: true, aspect: [1, 1], quality: 0.1, base64: true,
       });
 
       if (!result.canceled) {
@@ -168,17 +186,14 @@ export default function App() {
             canvas.width = 150; canvas.height = 150;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, 150, 150);
-            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.5);
-            setEditAvatarUrl(compressedBase64);
+            setEditAvatarUrl(canvas.toDataURL('image/jpeg', 0.5));
           };
           img.src = asset.uri;
         } else {
           setEditAvatarUrl(`data:image/jpeg;base64,${asset.base64}`);
         }
       }
-    } catch (e) {
-      alert("เกิดข้อผิดพลาดในการดึงรูป");
-    }
+    } catch (e) { alert("เกิดข้อผิดพลาดในการดึงรูป"); }
   };
 
   const saveProfileEdit = async () => {
@@ -225,11 +240,10 @@ export default function App() {
     </View>
   );
 
-  // --- 📱 หน้าจอ 0: Login ---
   const renderLoginScreen = () => (
     <View style={styles.loginContainer}>
       <View style={styles.logoRing}>
-        <Image source={require('../../assets/images/likay_logo.png')} style={styles.appLogoImage} />
+        <Image source={require('../../assets/images/logo-square.png')} style={styles.appLogoImage} />
       </View>
       <Text style={styles.appName}>ระบบบัญชีคณะลิเก</Text>
       <Text style={styles.appSubName}>✨ บริหารงานโดย {LEADER_NAME} ✨</Text>
@@ -259,7 +273,6 @@ export default function App() {
     </View>
   );
 
-  // --- 📱 หน้าจอ 1: Dashboard (หัวหน้าคณะ) ---
   const renderDashboardScreen = () => {
     let todayMalai = 0, todayCash = 0, todayLeaderShare = 0;
     let allTimeMalai = 0, allTimeCash = 0, allTimeLeaderShare = 0;
@@ -267,62 +280,70 @@ export default function App() {
 
     validArtists.forEach(artist => {
       const historyArray = Array.isArray(artist.history) ? artist.history : [];
+      
+      const dailyMalaiTotals = {};
+      historyArray.forEach(item => {
+        if (item.type === 'malai') {
+          dailyMalaiTotals[item.date] = (dailyMalaiTotals[item.date] || 0) + item.amount;
+        }
+      });
+
       historyArray.forEach(item => {
         const isToday = item.date === viewDateStr;
+        const dailyTotal = dailyMalaiTotals[item.date] || 0;
+        
+        // 🛡️ กฎการคำนวณ Dashboard ที่แม่นยำ
+        const isSplit = artist.name !== LEADER_NAME && dailyTotal >= 10;
+        const artistRate = isSplit ? 10 : 20;
+        const leaderRate = isSplit ? 10 : 0;
+
         if (item.type === 'malai') {
           allTimeMalai += item.amount;
-          if (isToday) todayMalai += item.amount;
+          allTimeLeaderShare += (item.amount * leaderRate);
+          if (isToday) {
+            todayMalai += item.amount;
+            todayLeaderShare += (item.amount * leaderRate);
+          }
+          if (!item.isPaid) totalPendingPay += (item.amount * artistRate);
         }
+
         if (item.type === 'cash') {
           allTimeCash += item.amount;
           if (isToday) todayCash += item.amount;
-        }
-        // คำนวณยอดค้างจ่าย
-        if (!item.isPaid) {
-          if (item.type === 'cash') totalPendingPay += item.amount;
-          if (item.type === 'malai') totalPendingPay += (item.amount * 20) / 2;
+          if (!item.isPaid) totalPendingPay += item.amount;
         }
       });
-    });
 
-    todayLeaderShare = (todayMalai * 20) / 2;
-    allTimeLeaderShare = (allTimeMalai * 20) / 2;
+      const datesWithUnpaid = new Set(historyArray.filter(h => !h.isPaid).map(h => h.date));
+      datesWithUnpaid.forEach(date => {
+         if (dailyMalaiTotals[date] >= 10) totalPendingPay += 100;
+      });
+    });
 
     return (
       <View style={{ flex: 1, backgroundColor: '#F4F6F9' }}>
         {renderHeader('📊 แดชบอร์ดการเงิน')}
         {renderDateSelector()}
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          
           <View style={styles.dashboardCard}>
             <Text style={styles.dashTitle}>📍 สรุปยอดวันนี้ ({viewDateStr})</Text>
-            <Text style={styles.dashText}>🌸 มาลัยรวม: {todayMalai} พวง ({(todayMalai * 20).toLocaleString()} บ.)</Text>
+            <Text style={styles.dashText}>🌸 มาลัยรวม: {todayMalai} พวง</Text>
             <Text style={styles.dashText}>💰 เงินสดรวม: {todayCash.toLocaleString()} บ.</Text>
             <View style={styles.dashLine} />
             <Text style={styles.dashHighlight}>👑 ส่วนแบ่งหัวหน้า: {todayLeaderShare.toLocaleString()} บ.</Text>
+            <Text style={{fontSize: 11, color: '#888'}}>*หัก 50% เฉพาะศิลปินที่ได้มาลัย 10 พวงขึ้นไป</Text>
           </View>
-
-          <View style={[styles.dashboardCard, {backgroundColor: '#4A148C'}]}>
-            <Text style={[styles.dashTitle, {color: '#FFD700'}]}>📈 สรุปยอดรวมทั้งหมด (All Time)</Text>
-            <Text style={[styles.dashText, {color: '#FFF'}]}>🌸 มาลัยรวม: {allTimeMalai} พวง ({(allTimeMalai * 20).toLocaleString()} บ.)</Text>
-            <Text style={[styles.dashText, {color: '#FFF'}]}>💰 เงินสดรวม: {allTimeCash.toLocaleString()} บ.</Text>
-            <View style={[styles.dashLine, {backgroundColor: '#7B1FA2'}]} />
-            <Text style={[styles.dashHighlight, {color: '#FFD700'}]}>👑 ส่วนแบ่งสะสม: {allTimeLeaderShare.toLocaleString()} บ.</Text>
-          </View>
-
           <View style={[styles.dashboardCard, {backgroundColor: '#FFF3E0', borderColor: '#FF9800', borderWidth: 1}]}>
-            <Text style={[styles.dashTitle, {color: '#E65100'}]}>⏳ ยอดค้างโอนศิลปินทั้งหมด</Text>
+            <Text style={[styles.dashTitle, {color: '#E65100'}]}>⏳ ยอดรวมค้างโอนศิลปินทั้งหมด</Text>
             <Text style={{fontSize: 32, fontWeight: 'bold', color: '#E65100', marginVertical: 10, textAlign: 'center'}}>{totalPendingPay.toLocaleString()} บาท</Text>
-            <Text style={{fontSize: 12, color: '#795548', textAlign: 'center'}}>*ไปที่เมนู 'สรุปบัญชี' เพื่อติ๊กจ่ายเงินให้ศิลปิน</Text>
+            <Text style={{fontSize: 12, color: '#795548', textAlign: 'center'}}>*เช็กยอดรายคนและกดจ่ายเงินได้ที่เมนู 'สรุปบัญชี'</Text>
           </View>
-
           <View style={{height: 40}} />
         </ScrollView>
       </View>
     );
   };
 
-  // --- 📱 หน้าจอ 2: เช็กยอดสำหรับศิลปิน ---
   const renderArtistScreen = () => (
     <View style={{ flex: 1, backgroundColor: '#F4F6F9' }}>
       {renderHeader('บอร์ดสรุปยอดศิลปิน')}
@@ -330,6 +351,9 @@ export default function App() {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {validArtists.map(artist => {
           const { malai, cash } = getTotalsByDate(artist, viewDateStr);
+          const isSplit = artist.name !== LEADER_NAME && malai >= 10;
+          const rate = isSplit ? 10 : 20;
+
           return (
             <View key={artist.id} style={styles.artistReadCard}>
               <View style={styles.profileRow}>
@@ -343,12 +367,14 @@ export default function App() {
               </View>
               <View style={styles.readDataRow}>
                 <View style={styles.readDataBox}>
-                  <Text style={styles.readDataLabel}>🌸 มาลัย (พวง)</Text>
+                  <Text style={styles.readDataLabel}>🌸 มาลัย</Text>
                   <Text style={[styles.readDataValue, {color: '#E91E63'}]}>{malai}</Text>
+                  <Text style={{fontSize: 10, color: '#888'}}>({rate} บ./พวง)</Text>
                 </View>
                 <View style={styles.readDataBox}>
-                  <Text style={styles.readDataLabel}>💰 รางวัลสด</Text>
+                  <Text style={styles.readDataLabel}>💰 เงินสด</Text>
                   <Text style={[styles.readDataValue, {color: '#2E7D32'}]}>{cash}</Text>
+                  <Text style={{fontSize: 10, color: '#888'}}>(รับเต็ม 100%)</Text>
                 </View>
               </View>
             </View>
@@ -359,7 +385,6 @@ export default function App() {
     </View>
   );
 
-  // --- 📱 หน้าจอ 3: บันทึกรายได้ (Admin) ---
   const renderAddTipScreen = () => (
     <View style={{ flex: 1, backgroundColor: '#F4F6F9' }}>
       {renderHeader('หน้าเวที: บันทึกยอด')}
@@ -367,7 +392,6 @@ export default function App() {
         <View style={styles.infoBanner}>
           <Text style={styles.infoBannerText}>กำลังบันทึกบัญชีของวันที่: {todayStr}</Text>
         </View>
-
         <View style={styles.addNameCompact}>
           <TextInput style={styles.inputCompact} placeholder="พิมพ์ชื่อรับเชิญใหม่..." value={newArtistName} onChangeText={setNewArtistName} />
           <TouchableOpacity style={styles.addBtnCompact} onPress={addNewArtist}>
@@ -384,9 +408,6 @@ export default function App() {
                   {renderAvatar(artist)}
                   <View>
                     <Text style={styles.adminArtistName}>{artist.name}</Text>
-                    <TouchableOpacity style={styles.editProfileBtn} onPress={() => { setEditingArtist(artist); setEditAvatarUrl(artist.avatar); }}>
-                      <Text style={styles.editProfileText}>✏️ เปลี่ยนรูป</Text>
-                    </TouchableOpacity>
                   </View>
                 </View>
                 <Text style={styles.adminSummaryText}>🌸 {malai}  |  💰 {cash}</Text>
@@ -409,61 +430,44 @@ export default function App() {
                   </TouchableOpacity>
                 ))}
               </View>
-
-              {dayHistory.length > 0 && (
-                <View style={styles.miniLog}>
-                  <Text style={styles.miniLogText} numberOfLines={1}>ล่าสุด: {dayHistory[0].text}</Text>
-                </View>
-              )}
             </View>
           );
         })}
         <View style={{height: 40}} />
       </ScrollView>
-
-      {/* Popup ถามชื่อผู้ให้ */}
-      <Modal visible={isModalVisible} transparent={true} animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>ใครเป็นคนให้?</Text>
-            <View style={styles.vipRow}>
-              {vipNames.map((name, index) => (
-                <TouchableOpacity key={index} style={styles.vipBtn} onPress={() => confirmTip(name)}>
-                  <Text style={styles.vipBtnText}>{name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TextInput style={styles.modalInput} placeholder="หรือพิมพ์ชื่อใหม่ที่นี่..." value={customGiverName} onChangeText={setCustomGiverName} />
-            <View style={styles.modalActionRow}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsModalVisible(false)}><Text style={styles.btnText}>ยกเลิก</Text></TouchableOpacity>
-              <TouchableOpacity style={[styles.confirmBtn, {backgroundColor: '#4A148C'}]} onPress={() => confirmTip(null)}><Text style={styles.btnText}>บันทึกยอด</Text></TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 
-  // --- 📱 หน้าจอ 4: สรุปบัญชี (Admin) ---
   const renderSummaryScreen = () => (
     <View style={{ flex: 1, backgroundColor: '#F4F6F9' }}>
       {renderHeader('บัญชีหลังบ้าน')}
       {renderDateSelector()}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.leaderCard}>
-          <Text style={styles.leaderTitle}>👑 ส่วนแบ่งหัวหน้า ประจำวันที่ {viewDateStr}</Text>
-          <Text style={styles.leaderMoney}>{getLeaderTotalByDate().toLocaleString()} บาท</Text>
-          <Text style={styles.leaderSub}>(หักจากยอดมาลัย 50% ของวันนี้)</Text>
-        </View>
-
+        
         {validArtists.map(artist => {
           const { malai, cash, dayHistory } = getTotalsByDate(artist, viewDateStr);
-          if (malai === 0 && cash === 0 && dayHistory.length === 0) return null;
+          
+          // 🛡️ กรองเฉพาะรายการที่ "ยังไม่จ่าย" มาแสดง
+          const unpaidHistory = dayHistory.filter(h => !h.isPaid);
 
-          const malaiMoney = malai * 20; 
-          const artistMalaiShare = malaiMoney / 2; 
-          const bonus = malai >= 10 ? 100 : 0; 
-          const finalPay = artistMalaiShare + cash + bonus; 
+          // ซ่อนการ์ดถ้ายอดเป็น 0 และไม่มีรายการค้าง
+          if (malai === 0 && cash === 0 && unpaidHistory.length === 0) return null;
+
+          // คำนวณเรทเงินมาลัย
+          const isSplit = artist.name !== LEADER_NAME && malai >= 10;
+          const rate = isSplit ? 10 : 20;
+
+          // คำนวณยอดเงินเฉพาะที่ "ยังไม่ได้จ่าย"
+          let unpaidMalai = 0; let unpaidCash = 0;
+          unpaidHistory.forEach(item => {
+            if (item.type === 'malai') unpaidMalai += item.amount;
+            if (item.type === 'cash') unpaidCash += item.amount;
+          });
+
+          const pendingMalaiPay = unpaidMalai * rate;
+          const pendingCashPay = unpaidCash;
+          const pendingBonus = (malai >= 10 && unpaidHistory.length > 0) ? 100 : 0;
+          const finalPay = pendingMalaiPay + pendingCashPay + pendingBonus;
 
           return (
             <View key={artist.id} style={styles.summaryCard}>
@@ -473,23 +477,40 @@ export default function App() {
               </View>
               
               <View style={styles.sumBox}>
-                <Text style={styles.sumText}>🌸 มาลัย {malai} พวง ({malaiMoney} บ.) ↳ แบ่งศิลปิน: <Text style={{fontWeight:'bold', color:'#333'}}>{artistMalaiShare}</Text> บ.</Text>
-                <Text style={styles.sumText}>💰 รางวัลสด (รับเต็ม): <Text style={{fontWeight:'bold', color:'#333'}}>{cash}</Text> บ.</Text>
-                {bonus > 0 && <Text style={styles.sumBonus}>🎉 โบนัสมาลัย: +{bonus} บ.</Text>}
+                <Text style={{fontWeight: 'bold', color: '#4A148C', marginBottom: 5}}>📌 ยอดรวมที่หาได้วันนี้ (รวมที่จ่ายแล้ว):</Text>
+                {artist.name === LEADER_NAME ? (
+                  <Text style={styles.sumText}>🌸 มาลัย {malai} พวง ↳ (รับเต็มไม่มีหัก): <Text style={{fontWeight:'bold', color:'#333'}}>{malai * 20}</Text> บ.</Text>
+                ) : (
+                  <Text style={styles.sumText}>
+                    🌸 มาลัย {malai} พวง ↳ {malai >= 10 ? `แบ่งเข้าวง 50%: ` : `รับเต็ม 100%: `}
+                    <Text style={{fontWeight:'bold', color:'#333'}}>{malai * rate}</Text> บ.
+                  </Text>
+                )}
+                <Text style={styles.sumText}>💰 รางวัลสด: <Text style={{fontWeight:'bold', color:'#333'}}>{cash}</Text> บ.</Text>
+                {malai >= 10 && <Text style={styles.sumBonus}>🎉 โบนัสแตก (10 พวง): +100 บ.</Text>}
               </View>
               
-              <Text style={styles.finalPayText}>ยอดโอนสุทธิ: {finalPay.toLocaleString()} บาท</Text>
-
               <View style={styles.historyBox}>
-                <Text style={styles.historyTitle}>รายการของวันนี้ (กดเพื่อติ๊กจ่ายแล้ว)</Text>
-                {dayHistory.length === 0 ? <Text style={styles.historyText}>- ไม่มีรายการ -</Text> : 
-                  dayHistory.map(item => (
-                    <TouchableOpacity key={item.id} style={[styles.historyRow, item.isPaid ? styles.historyPaidBg : styles.historyPendingBg]} onPress={() => togglePaymentStatus(artist.id, item.id)}>
-                      <Text style={[styles.historyText, item.isPaid && styles.historyTextPaid]} numberOfLines={1}>• {item.text}</Text>
-                      <Text style={[styles.statusBadge, item.isPaid ? styles.badgePaid : styles.badgePending]}>{item.isPaid ? '✅ จ่ายแล้ว' : '⏳ รอโอน'}</Text>
+                <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10}}>
+                   <Text style={styles.historyTitle}>⏳ รายการค้างจ่าย (กดเพื่อโอน)</Text>
+                   <Text style={styles.finalPayText}>รวมยอดโอน: {finalPay.toLocaleString()} บ.</Text>
+                </View>
+
+                {/* ถ้ารายการค้างจ่ายหมดแล้ว ให้ขึ้นข้อความสีเขียว */}
+                {unpaidHistory.length === 0 ? (
+                  <View style={{backgroundColor: '#E8F5E9', padding: 10, borderRadius: 8, alignItems: 'center'}}>
+                    <Text style={{color: '#2E7D32', fontWeight: 'bold'}}>✅ จ่ายครบหมดแล้ว (ซ่อนรายการอัตโนมัติ)</Text>
+                  </View>
+                ) : (
+                  unpaidHistory.map(item => (
+                    <TouchableOpacity key={item.id} style={[styles.historyRow, styles.historyPendingBg]} onPress={() => togglePaymentStatus(artist.id, item.id)}>
+                      <Text style={styles.historyText} numberOfLines={1}>• {item.text}</Text>
+                      <View style={{backgroundColor: '#4A148C', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12}}>
+                        <Text style={{color: '#FFF', fontSize: 11, fontWeight: 'bold'}}>คลิกเพื่อจ่าย</Text>
+                      </View>
                     </TouchableOpacity>
                   ))
-                }
+                )}
               </View>
             </View>
           );
@@ -508,12 +529,10 @@ export default function App() {
       {currentScreen === 'addTip' && renderAddTipScreen()}
       {currentScreen === 'summary' && renderSummaryScreen()}
 
-      {/* Modal แก้ไขรูปโปรไฟล์ */}
       <Modal visible={!!editingArtist} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>อัปโหลดรูปโปรไฟล์ใหม่</Text>
-            
             {editAvatarUrl ? (
               <Image source={{ uri: editAvatarUrl }} style={{ width: 120, height: 120, borderRadius: 60, alignSelf: 'center', marginBottom: 20, borderWidth: 2, borderColor: '#4A148C' }} />
             ) : (
@@ -521,11 +540,7 @@ export default function App() {
                 <Text style={{color: '#999'}}>ไม่มีรูป</Text>
               </View>
             )}
-
-            <TouchableOpacity style={styles.uploadBtn} onPress={pickImage}>
-              <Text style={styles.uploadBtnText}>📸 เปิดอัลบั้มรูปภาพ</Text>
-            </TouchableOpacity>
-            
+            <TouchableOpacity style={styles.uploadBtn} onPress={pickImage}><Text style={styles.uploadBtnText}>📸 เปิดอัลบั้มรูปภาพ</Text></TouchableOpacity>
             <View style={styles.modalActionRow}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditingArtist(null)}><Text style={styles.btnText}>ยกเลิก</Text></TouchableOpacity>
               <TouchableOpacity style={[styles.confirmBtn, {backgroundColor: '#4A148C'}]} onPress={saveProfileEdit}><Text style={styles.btnText}>อัปเดตข้อมูล</Text></TouchableOpacity>
@@ -534,7 +549,6 @@ export default function App() {
         </View>
       </Modal>
 
-      {/* Modal เมนู */}
       <Modal visible={isMenuOpen} transparent={true} animationType="fade">
         <View style={styles.menuOverlay}>
           <View style={styles.menuBoxFull}>
@@ -548,7 +562,10 @@ export default function App() {
                   <Text style={styles.menuItemText}>📝 ไปหน้าเวที (บันทึกยอด)</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.menuItem} onPress={() => { setCurrentScreen('summary'); setIsMenuOpen(false); }}>
-                  <Text style={styles.menuItemText}>💰 ไปหลังบ้าน (สรุปบัญชี)</Text>
+                  <Text style={styles.menuItemText}>💰 ไปหลังบ้าน (สรุปบัญชี / โอนเงิน)</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.menuItem, {marginTop: 30, backgroundColor: '#FFF3E0', borderRadius: 8}]} onPress={resetTestData}>
+                  <Text style={[styles.menuItemText, {color: '#E65100', fontWeight: 'bold'}]}>🗑️ ล้างข้อมูลทดลองทิ้งทั้งหมด</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -557,14 +574,11 @@ export default function App() {
                 <Text style={styles.menuItemText}>🌟 บอร์ดศิลปิน</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={[styles.menuItem, {borderBottomWidth: 0, marginTop: 40, backgroundColor: '#FFEBEE', borderRadius: 10}]} onPress={logout}>
+            <TouchableOpacity style={[styles.menuItem, {borderBottomWidth: 0, marginTop: 20, backgroundColor: '#FFEBEE', borderRadius: 10}]} onPress={logout}>
               <Text style={[styles.menuItemText, {color: '#D32F2F', fontWeight: 'bold', textAlign: 'center'}]}>🚪 ออกจากระบบ</Text>
             </TouchableOpacity>
-            
             <View style={{flex: 1}} />
-            <TouchableOpacity style={styles.closeMenuBtn} onPress={() => setIsMenuOpen(false)}>
-              <Text style={styles.closeMenuText}>✕ ปิดหน้าต่าง</Text>
-            </TouchableOpacity>
+            <TouchableOpacity style={styles.closeMenuBtn} onPress={() => setIsMenuOpen(false)}><Text style={styles.closeMenuText}>✕ ปิดหน้าต่าง</Text></TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -652,25 +666,20 @@ const styles = StyleSheet.create({
   summaryCard: { backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 15, elevation: 3, borderLeftWidth: 5, borderLeftColor: '#4A148C' },
   artistName: { fontSize: 18, fontWeight: 'bold', color: '#333' },
   sumBox: { backgroundColor: '#F5F5F5', padding: 12, borderRadius: 8, marginVertical: 12, borderWidth: 1, borderColor: '#EEE' },
-  sumText: { fontSize: 14, color: '#555', marginBottom: 6 },
+  sumText: { fontSize: 13, color: '#555', marginBottom: 6 },
   sumBonus: { fontSize: 14, color: '#E91E63', fontWeight: 'bold', marginTop: 4 }, 
-  finalPayText: { fontSize: 18, color: '#2E7D32', fontWeight: 'bold', marginBottom: 12, textAlign: 'right' },
+  finalPayText: { fontSize: 18, color: '#E91E63', fontWeight: 'bold', textAlign: 'right' },
   historyBox: { borderTopWidth: 1, borderTopColor: '#EEE', paddingTop: 12 },
-  historyTitle: { fontSize: 13, fontWeight: 'bold', color: '#4A148C', marginBottom: 10 },
+  historyTitle: { fontSize: 13, fontWeight: 'bold', color: '#4A148C' },
   historyRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 10, borderRadius: 6, marginBottom: 6 },
   historyPendingBg: { backgroundColor: '#FFF3E0', borderWidth: 1, borderColor: '#FFE0B2' },
-  historyPaidBg: { backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#C8E6C9' },
-  historyText: { fontSize: 13, color: '#333', flex: 1 },
-  historyTextPaid: { color: '#999', textDecorationLine: 'line-through' },
-  statusBadge: { fontSize: 12, fontWeight: 'bold', color: '#555' },
-  badgePending: { color: '#E65100' },
-  badgePaid: { color: '#2E7D32' },
+  historyText: { fontSize: 14, color: '#333', flex: 1, fontWeight: 'bold' },
 
   menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-start', alignItems: 'flex-end' },
   menuBoxFull: { width: '80%', maxWidth: 350, height: '100%', backgroundColor: '#FFF', padding: 25, paddingTop: 60, elevation: 15 },
   menuTitle: { fontSize: 20, fontWeight: 'bold', color: '#4A148C' },
   menuItem: { paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: '#EEE' },
-  menuItemText: { fontSize: 18, color: '#333' },
+  menuItemText: { fontSize: 16, color: '#333' },
   closeMenuBtn: { backgroundColor: '#F5F5F5', padding: 15, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#DDD', marginBottom: 20 },
   closeMenuText: { color: '#555', fontSize: 16, fontWeight: 'bold' },
   
@@ -679,10 +688,9 @@ const styles = StyleSheet.create({
   uploadBtn: { backgroundColor: '#F3E5F5', padding: 15, borderRadius: 10, marginBottom: 25, alignItems: 'center', borderWidth: 1, borderColor: '#CE93D8' },
   uploadBtnText: { color: '#4A148C', fontWeight: 'bold', fontSize: 16 },
 
-  // สไตล์สำหรับหน้า Dashboard 
   dashboardCard: { backgroundColor: '#FFF', padding: 20, borderRadius: 12, marginBottom: 15, elevation: 3, borderWidth: 1, borderColor: '#EEE' },
   dashTitle: { fontSize: 18, fontWeight: 'bold', color: '#4A148C', marginBottom: 15 },
   dashText: { fontSize: 16, color: '#333', marginBottom: 8 },
   dashLine: { height: 1, backgroundColor: '#EEE', marginVertical: 12 },
   dashHighlight: { fontSize: 18, fontWeight: 'bold', color: '#E91E63' }
-}); 
+});
