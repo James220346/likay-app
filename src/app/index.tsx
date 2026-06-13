@@ -35,7 +35,6 @@ export default function App() {
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
   const [currentDateObj, setCurrentDateObj] = useState(new Date());
   
-  // 🚨 State ใหม่สำหรับ Pop-up แจ้งเตือนลบข้อมูลสุดหรู
   const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
 
   const getThaiDateStr = (dateObj) => dateObj.toLocaleDateString('th-TH');
@@ -154,7 +153,6 @@ export default function App() {
     saveDataToCloud(updatedArtists);
   };
 
-  // 🛡️ ฟังก์ชันสั่งเคลียร์ข้อมูลจริง ยิงตรงเข้าคลาวด์
   const executeResetAllData = () => {
     saveDataToCloud(defaultArtists);
     setShowResetConfirmModal(false);
@@ -177,7 +175,13 @@ export default function App() {
             const canvas = document.createElement('canvas');
             canvas.width = 150; canvas.height = 150;
             const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, 150, 150);
+            
+            // 🛠️ ตรรกะใหม่: คำนวณตัดขอบรูปภาพจากตรงกลางให้เป็นจัตุรัสก่อนย่อขนาด (กันรูปเบี้ยว)
+            const size = Math.min(img.width, img.height);
+            const startX = (img.width - size) / 2;
+            const startY = (img.height - size) / 2;
+            ctx.drawImage(img, startX, startY, size, size, 0, 0, 150, 150);
+            
             setEditAvatarUrl(canvas.toDataURL('image/jpeg', 0.5));
           };
           img.src = asset.uri;
@@ -424,7 +428,6 @@ export default function App() {
         <View style={{height: 40}} />
       </ScrollView>
 
-      {/* Pop-up คัดเลือกแม่ยก/ผู้ให้รางวัลดีไซน์หรูหรา */}
       <Modal visible={isModalVisible} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.luxuryPopupBox}>
@@ -537,7 +540,6 @@ export default function App() {
       {currentScreen === 'addTip' && renderAddTipScreen()}
       {currentScreen === 'summary' && renderSummaryScreen()}
 
-      {/* Pop-up แก้ไขรูปภาพดีไซน์หรู */}
       <Modal visible={!!editingArtist} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.luxuryPopupBox}>
@@ -556,7 +558,6 @@ export default function App() {
         </View>
       </Modal>
 
-      {/* 🚨 Pop-up แจ้งเตือนลบข้อมูลทดลองตัวใหม่ (การันตีความสวยงามและกดลบได้ชัวร์ 100%) */}
       <Modal visible={showResetConfirmModal} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={[styles.luxuryPopupBox, {borderColor: '#D32F2F', borderWidth: 2}]}>
@@ -574,10 +575,15 @@ export default function App() {
         </View>
       </Modal>
 
-      {/* Pop-up สไลด์เมนูด้านข้างระดับ VIP */}
+      {/* 🛠️ แก้ไขระบบเมนูให้กดพื้นที่ว่างแล้วปิดได้ */}
       <Modal visible={isMenuOpen} transparent={true} animationType="fade">
-        <View style={styles.menuOverlay}>
-          <View style={styles.menuBoxFull}>
+        <TouchableOpacity 
+          style={styles.menuOverlay} 
+          activeOpacity={1} 
+          onPressOut={() => setIsMenuOpen(false)}
+        >
+          {/* ป้องกันไม่ให้การกดที่ตัวเมนูไปสั่งให้เมนูปิด */}
+          <View style={styles.menuBoxFull} onStartShouldSetResponder={() => true}>
             <Text style={styles.menuMainTitle}>แผงควบคุมระบบ 🎭</Text>
             {role === 'admin' && (
               <>
@@ -590,9 +596,7 @@ export default function App() {
                 <TouchableOpacity style={styles.menuItem} onPress={() => { setCurrentScreen('summary'); setIsMenuOpen(false); }}>
                   <Text style={styles.menuItemText}>💰 บัญชีหลังบ้าน / โอนเงิน</Text>
                 </TouchableOpacity>
-                
-                {/* ปุ่มลบข้อมูลที่ลิงก์เข้า Pop-up ตัวใหม่ */}
-                <TouchableOpacity style={styles.menuResetBtn} onPress={() => { setShowResetConfirmModal(true); }}>
+                <TouchableOpacity style={styles.menuResetBtn} onPress={() => { setShowResetConfirmModal(true); setIsMenuOpen(false); }}>
                   <Text style={styles.menuResetBtnText}>🗑️ ล้างข้อมูลทดลอง (เริ่มงานจริง)</Text>
                 </TouchableOpacity>
               </>
@@ -606,15 +610,14 @@ export default function App() {
               <Text style={styles.menuLogoutText}>🚪 ออกจากระบบ</Text>
             </TouchableOpacity>
             <View style={{flex: 1}} />
-            <TouchableOpacity style={styles.closeMenuBtn} onPress={() => setIsMenuOpen(false)}><Text style={styles.closeMenuText}>✕ ปิดหน้าต่างเมนู</Text></TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
     </SafeAreaView>
   );
 }
 
-// --- สไตล์การตกแต่งโมเดิร์นคลาสสิก (ม่วง-ทอง หรูหรา ไร้ที่ติ) ---
+// --- สไตล์การตกแต่ง ---
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#3A0F63', padding: 16, paddingTop: Platform.OS === 'ios' ? 45 : 16, elevation: 6, borderBottomWidth: 2, borderBottomColor: '#FFD700' }, 
   hamburgerBtn: { position: 'absolute', left: 12, bottom: 10, width: 45, height: 45, justifyContent: 'center', alignItems: 'center', zIndex: 10000 },
@@ -645,7 +648,6 @@ const styles = StyleSheet.create({
   artistCardTitle: { fontSize: 19, fontWeight: 'bold', color: '#3A0F63', marginBottom: 4 },
   artistCardSub: { fontSize: 12, color: '#777' },
 
-  // โซนสไตล์ Pop-up (Modal) ดีไซน์พิเศษ VIP
   modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 4, 32, 0.85)', justifyContent: 'center', padding: 20 },
   luxuryPopupBox: { backgroundColor: '#FFF', padding: 24, borderRadius: 24, elevation: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 10, borderWidth: 1.5, borderColor: '#FFD700' },
   luxuryPopupTitle: { fontSize: 21, fontWeight: 'bold', marginBottom: 22, textAlign: 'center', color: '#3A0F63', letterSpacing: 0.5 },
@@ -702,7 +704,6 @@ const styles = StyleSheet.create({
   clickToPayBadge: { backgroundColor: '#3A0F63', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#FFD700' },
   paidSuccessBanner: { backgroundColor: '#E8F5E9', padding: 12, borderRadius: 10, alignItems: 'center' },
 
-  // สไตล์สไลด์เมนูด้านข้าง ระดับ VIP
   menuOverlay: { flex: 1, backgroundColor: 'rgba(19, 5, 38, 0.7)', justifyContent: 'flex-start', alignItems: 'flex-end' },
   menuBoxFull: { width: '82%', maxWidth: 340, height: '100%', backgroundColor: '#FFF', padding: 24, paddingTop: 60, elevation: 20 },
   menuMainTitle: { fontSize: 22, fontWeight: 'bold', color: '#3A0F63', borderBottomWidth: 2, borderBottomColor: '#FFD700', paddingBottom: 12, marginBottom: 25 },
@@ -712,8 +713,6 @@ const styles = StyleSheet.create({
   menuResetBtnText: { color: '#E65100', fontWeight: 'bold', fontSize: 15 },
   menuLogoutBtn: { marginTop: 20, backgroundColor: '#FFEBEE', padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#FFCDD2' },
   menuLogoutText: { color: '#D32F2F', fontWeight: 'bold', fontSize: 15, textAlign: 'center' },
-  closeMenuBtn: { backgroundColor: '#F5F5FA', padding: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#DDD', marginBottom: 20 },
-  closeMenuText: { color: '#555', fontSize: 15, fontWeight: 'bold' },
   
   editProfileBtn: { marginTop: 6, backgroundColor: '#FFF', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, borderWidth: 1.5, borderColor: '#3A0F63', alignSelf: 'flex-start' },
   editProfileText: { fontSize: 11, color: '#3A0F63', fontWeight: 'bold' },
@@ -722,7 +721,6 @@ const styles = StyleSheet.create({
   uploadBtn: { backgroundColor: '#F3E5F5', padding: 14, borderRadius: 12, marginBottom: 24, alignItems: 'center', borderWidth: 1.5, borderColor: '#D1C4E9' },
   uploadBtnText: { color: '#4A148C', fontWeight: 'bold', fontSize: 15 },
 
-  // สไตล์หน้าแดชบอร์ดการเงินวงตัวใหม่
   dashboardCard: { backgroundColor: '#FFF', padding: 20, borderRadius: 20, marginBottom: 16, elevation: 4, borderWidth: 1, borderColor: '#EBEBEB' },
   dashTitle: { fontSize: 17, fontWeight: 'bold', color: '#3A0F63', marginBottom: 16 },
   dashDetailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, alignItems: 'center' },
